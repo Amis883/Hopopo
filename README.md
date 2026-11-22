@@ -18,7 +18,7 @@
 
 ### نصب روی گوشی
 1. **Settings ← Pages** را باز کن و در بخش Branch گزینهٔ `main` و پوشهٔ `/ (root)` را انتخاب کن و Save را بزن.
-2. آدرس سایت را باز کن: `https://amis883.github.io/hopopo/`
+2. آدرس سایت را باز کن: `https://amis883.github.io/Hopopo/`
    - **آیفون:** در Safari دکمهٔ Share و بعد **Add to Home Screen** را بزن.
    - **اندروید:** در Chrome از منوی ⋮ گزینهٔ **Install app** را بزن.
 3. **صدای آلمانی:** در آیفون از Settings ← Accessibility ← Spoken Content ← Voices، و در اندروید از Text-to-speech، صدای Deutsch را دانلود کن.
