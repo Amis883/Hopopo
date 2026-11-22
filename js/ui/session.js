@@ -5,7 +5,7 @@ import { scoreSpeech, tokens } from '../core/scoring.js';
 import { dayKey, stats } from '../core/stats.js';
 import { S, save } from '../data/store.js';
 import { getBook } from '../data/books.js';
-import { speak, stopSpeaking, unlockAudio, listenOnce, recognitionBlocked } from '../services/speech.js';
+import { speak, stopSpeaking, unlockAudio, listenOnce, recognitionBlocked, stopListening } from '../services/speech.js';
 import { unlockClips, useAudio, playClip, stopClip } from '../services/audioclip.js';
 import { PROFILES } from '../core/languages.js';
 import { tt, num, langName, phaseText, weekdays, getUI } from '../i18n.js';
@@ -32,7 +32,10 @@ export async function startSession(l) {
   const plan = buildPlan(t, meta, book.sentences, { wholeSentences: isAudio });
   if (plan.newCount === 0) { toast(tt('You finished this book! 🎉 Add a new one or restart it.', 'این کتاب تمام شد! 🎉 کتاب جدید اضافه کن یا از اول شروع کن.'), 5000); return renderTrack(l); }
   R = { lang: l, bookId: t.bookId, book, plan, i: 0, token: 0, playing: false, elapsed: 0, showText: true, scores: [] };
-  render(); wakeLock(true); runFrom(0);
+  render(); wakeLock(true);
+  // the phone's back gesture / button leaves the session cleanly
+  try { history.pushState({ hopopoSession: 1 }, ''); } catch (e) { /* ignore */ }
+  runFrom(0);
 }
 
 function render() {
@@ -159,33 +162,55 @@ async function silentGap(c, st, tok) {
   g.classList.remove('on');
 }
 
-/** Listen to the learner, score, and show per-word marks. Falls back to a silent gap without a mic. */
+/**
+ * Listen to the learner, score, and show per-word marks.
+ * Without a usable microphone it falls back to a silent gap. "Heard nothing" is never shown as all-red:
+ * phones often fail to pick up speech, and marking the learner wrong for that is discouraging and wrong.
+ * After 3 failed turns in a row the check is switched off for the rest of the session.
+ */
 async function learnerTurn(st, c, tok) {
+  if (R.noCheck) return silentGap(c, st, tok);
   const dur = voiceDur(c, st.ph.r), g = $('#gap'), gt = $('#gaptext'), hd = $('#heard');
+  await wait(300, tok); if (!live(tok)) return;   // let the speaker audio release before the mic opens (iOS)
   gt.textContent = tt('🎙 Now say it… I\'m listening', '🎙 حالا بگو… گوش می‌دهم'); gt.classList.add('listening'); $('#gapfill').style.width = '100%'; g.classList.add('on');
-  const heard = await listenOnce(R.lang, (dur * 1.8 + 4) * 1000, () => !live(tok), t => { hd.innerHTML = `<span class="lbl">${tt('I heard: ', 'شنیدم: ')}</span><span class="txt">${esc(t)}</span>`; });
+  const heard = await listenOnce(R.lang, (dur * 1.8 + 5) * 1000, () => !live(tok), t => { hd.innerHTML = `<span class="lbl">${tt('I heard: ', 'شنیدم: ')}</span><span class="txt">${esc(t)}</span>`; });
   g.classList.remove('on'); gt.classList.remove('listening'); gt.textContent = tt('Your turn — repeat it aloud', 'نوبت توئه — بلند تکرار کن');
   if (!live(tok)) return;
   if (heard === null) {
-    if (!R.srWarned) {
-      R.srWarned = true;
-      toast(recognitionBlocked() ? tt('Microphone permission was denied; continuing without checking.', 'اجازهٔ میکروفون داده نشد؛ بدون بررسی ادامه می‌دهیم.')
-        : isFramed ? tt('The speech check only works in the installed app; here you just get a pause to repeat.', 'بررسی گفتار فقط در نسخهٔ نصب‌شدهٔ اپ کار می‌کند؛ اینجا فقط فرصت تکرار داری.')
-        : tt('This browser has no speech recognition; try Chrome or Safari.', 'این مرورگر تشخیص گفتار ندارد؛ Chrome یا Safari را امتحان کن.'), 5500);
-    }
+    R.noCheck = true;
+    toast(recognitionBlocked() ? tt('Microphone permission was denied; continuing with repeat pauses.', 'اجازهٔ میکروفون داده نشد؛ با مکث برای تکرار ادامه می‌دهیم.')
+      : isFramed ? tt('The speech check only works in the installed app; here you just get a pause to repeat.', 'بررسی گفتار فقط در نسخهٔ نصب‌شدهٔ اپ کار می‌کند؛ اینجا فقط فرصت تکرار داری.')
+      : tt('This browser has no speech recognition; continuing with repeat pauses.', 'این مرورگر تشخیص گفتار ندارد؛ با مکث برای تکرار ادامه می‌دهیم.'), 5500);
     return silentGap(c, st, tok);
   }
-  const res = heard ? scoreSpeech(c.text, heard, R.lang) : { marks: tokens(c.text, R.lang).map(() => 'bad'), score: 0 };
+  if (!heard.text) {
+    R.srFails = (R.srFails || 0) + 1;
+    hd.innerHTML = `<span class="lbl">${heard.error
+      ? tt(`The phone couldn't listen (${esc(heard.error)}).`, `گوشی نتوانست گوش بدهد (${esc(heard.error)}).`)
+      : tt('I didn\'t catch that — no problem, keep going.', 'صدایت را نگرفتم — اشکالی ندارد، ادامه بده.')}</span>`;
+    if (R.srFails >= 3) {
+      R.noCheck = true;
+      toast(tt('Speech check isn\'t picking you up on this phone, so it\'s off for this session. Try "Test the speech check" in Book & settings.', 'بررسی گفتار روی این گوشی صدایت را نمی‌گیرد، برای همین در این جلسه خاموش شد. در «کتاب و تنظیمات» دکمهٔ «تست بررسی گفتار» را امتحان کن.'), 7000);
+    }
+    await wait(1400, tok);
+    return;
+  }
+  R.srFails = 0;
+  const res = scoreSpeech(c.text, heard.text, R.lang);
   showMarks(res.marks, c.text);
   const col = res.score >= 85 ? 'var(--ok)' : res.score >= 60 ? 'var(--de)' : 'var(--danger)';
-  hd.innerHTML = heard
-    ? `<span class="lbl">${tt('I heard: ', 'شنیدم: ')}</span><span class="txt">${esc(heard)}</span><span class="score" style="background:${col}">${num(res.score)}${tt('%', '٪')}</span>`
-    : `<span class="lbl">${tt('I didn\'t hear anything — speak louder and closer to the phone.', 'صدایی نشنیدم — بلندتر و نزدیک‌تر به گوشی بگو.')}</span>`;
+  hd.innerHTML = `<span class="lbl">${tt('I heard: ', 'شنیدم: ')}</span><span class="txt">${esc(heard.text)}</span><span class="score" style="background:${col}">${num(res.score)}${tt('%', '٪')}</span>`;
   R.scores.push({ k: st.k, score: res.score });
   await wait(res.score >= 85 ? 1600 : 2800, tok);
 }
 
-function stopAudio() { if (!R) return; R.token++; stopSpeaking(); stopClip(); const g = $('#gap'); if (g) g.classList.remove('on'); clearHl(); }
+/** Stops everything that makes sound or listens. Never throws: leaving a session must always work. */
+function stopAudio() {
+  if (!R) return;
+  R.token++;
+  for (const f of [stopSpeaking, stopClip, stopListening]) { try { f(); } catch (e) { /* keep going */ } }
+  try { const g = $('#gap'); if (g) g.classList.remove('on'); clearHl(); } catch (e) { /* ignore */ }
+}
 function pause() { stopAudio(); R.playing = false; update(); }
 
 /** Progress is saved per sentence as the runner reaches it, so leaving mid-session loses nothing. */
@@ -238,6 +263,16 @@ function againFinal() {
   R = { ...R, plan: { ...R.plan, steps }, i: 0, token: 0, playing: false, elapsed: 0, extra: true, scores: [] };
   unlockAudio(); unlockClips(); render(); wakeLock(true); runFrom(0);
 }
+
+/** Leave the session. Each step is guarded so the learner always gets back home. */
+export function exitSession() {
+  document.getElementById('quitov')?.remove();
+  try { stopAudio(); } catch (e) { /* ignore */ }
+  try { wakeLock(false); } catch (e) { /* ignore */ }
+  try { if (R && ui.view === 'session') saveSession(false); } catch (e) { /* ignore */ }
+  renderHome();
+}
+window.addEventListener('popstate', () => { if (ui.view === 'session') exitSession(); });
 
 function askQuit() {
   pause();
@@ -310,9 +345,9 @@ export const actions = {
   playrec: () => playRec(),
   closelookup: () => $('#lookup').classList.add('hidden'),
   sayword: el => speak(el.dataset.w, .8, track()),
-  quit: () => askQuit(),
+  quit: () => { try { askQuit(); } catch (e) { exitSession(); } },
   resume: () => { $('#quitov')?.remove(); runFrom(chunkStart(R.plan.steps, R.i)); },
-  exit: () => { $('#quitov')?.remove(); stopAudio(); wakeLock(false); saveSession(false); renderHome(); },
+  exit: () => exitSession(),
   again: () => againFinal(),
   home: () => { stopAudio(); renderHome(); },
 };

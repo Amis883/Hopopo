@@ -15,9 +15,10 @@ export function newTrack(lang, level = 'A1') {
   return t;
 }
 
+/** A new user starts with no tracks: the welcome screen asks for their language and level. */
 function defaults() {
-  const en = { ...newTrack('en', 'B2'), minutes: 15 };
-  return { ui: 'en', order: ['en', 'de'], tracks: { en, de: newTrack('de', 'A1') } };
+  const ui = typeof navigator !== 'undefined' && /^fa\b/i.test(navigator.language || '') ? 'fa' : 'en';
+  return { ui, order: [], tracks: {}, onboarded: false };
 }
 
 /** Loads state and migrates older shapes (v1 had only en/de and no `order`). */
@@ -27,6 +28,7 @@ export function loadState() {
   if (!s || !s.tracks) return defaults();
   for (const k of Object.keys(s.tracks)) s.tracks[k] = Object.assign(newTrack(k), s.tracks[k]);
   if (!Array.isArray(s.order)) s.order = Object.keys(s.tracks);
+  if (s.onboarded === undefined) s.onboarded = true;            // users from before the welcome screen
   s.order = s.order.filter(k => s.tracks[k]);
   for (const k of s.order) { const sm = s.tracks[k].books['sample-' + k]; if (sm && SAMPLES[k]) sm.title = SAMPLES[k].title; }
   return s;

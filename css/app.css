@@ -153,3 +153,13 @@ input[type=range]{width:100%;accent-color:var(--acc)}
 .badge.audio{background:var(--ink)}
 .credit{font-size:.8rem;color:var(--muted);margin-top:4px}
 .credit a{color:inherit}
+.levels{display:flex;flex-direction:column;gap:6px}
+.lvl{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:14px;padding:10px 12px;cursor:pointer}
+.lvl input{width:20px;height:20px;margin-top:3px;accent-color:var(--ink);flex:none}
+.lvl small{display:block;color:var(--muted);font-size:.84rem}
+.lvl:has(input:checked){border:2px solid var(--ink)}
+.pill{flex:1}
+.pill input{position:absolute;opacity:0}
+.pill span{display:block;text-align:center;border:1px solid var(--line);border-radius:12px;padding:8px 0;font-weight:700}
+.pill input:checked+span{background:var(--ink);color:var(--bg)}
+.sptest{margin-top:8px;font-size:.9rem}

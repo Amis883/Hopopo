@@ -62,7 +62,7 @@ flowchart TD
 | `data/books.js` | Book sentences in IndexedDB, in-memory cache, append/import/delete |
 | `services/*` | Thin adapters over Web Speech, pdf.js, JSZip, Tesseract, Claude, and clip playback of recorded MP3s (`audioclip.js`) |
 | `i18n.js` | Interface language (EN/FA), RTL switch, localized numbers |
-| `ui/*` | Screens; each exports an `actions` map |
+| `ui/*` | Screens (welcome/onboarding, home, track, import, session); each exports an `actions` map |
 | `sw.js` | Service worker (offline) |
 
 ## 4. Data model
@@ -124,6 +124,10 @@ The heuristic drops lines that start with task verbs in several languages ("Hör
 ### 5.4 Speech check (`core/scoring.js`)
 
 Recognition comes from the Web Speech API in the learner's language. Scoring aligns heard tokens to target tokens with an edit-distance DP. Substitution cost depends on fuzzy word similarity (Levenshtein ratio, with accent-only differences at 0.9), and insertions cost less than deletions, so filler words ("eh…") barely matter while skipped words do. Backtracking gives a mark per target word: **ok / close / bad**. Digits are folded to number words for en/de/nl, because recognizers often return "7" for "sieben". Scripts without spaces (Japanese, Chinese) are compared per character.
+
+**Failure handling.** Phone recognizers often end a session before the learner starts speaking, or return nothing. So `listenOnce` restarts recognition while the turn still has time, and reports `{text, error}` instead of guessing. An empty result is shown as "didn't catch that", never as all-red, because a microphone problem must not look like a learner mistake. After three failed turns in a row the check switches itself off for the session and the turn becomes a silent repeat gap. "Test the speech check" in settings shows exactly what the phone hears, or the error code, so problems can be diagnosed on the user's device.
+
+**Leaving a session always works.** Stopping is idempotent and guarded step by step (speech, clip, recognition, wake lock, save). The session pushes a history entry, so the phone's back gesture exits cleanly, and unexpected errors surface as a toast instead of a frozen screen.
 
 ### 5.5 Offline (`sw.js`)
 

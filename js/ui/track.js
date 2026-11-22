@@ -2,7 +2,7 @@
 import { PROFILES, LEVELS, lang as langInfo, isRtl, trackColor } from '../core/languages.js';
 import { S, save, removeTrack } from '../data/store.js';
 import { getBook, deleteBook, forgetBooks } from '../data/books.js';
-import { voicesFor, voiceFor, onVoicesChanged, speak, unlockAudio, recognitionSupported } from '../services/speech.js';
+import { voicesFor, voiceFor, onVoicesChanged, speak, unlockAudio, recognitionSupported, listenOnce, recognitionBlocked } from '../services/speech.js';
 import { tt, num, langName, getUI } from '../i18n.js';
 import { app, $, esc, toast, ui, isFramed } from './dom.js';
 import { importPanel } from './importFlow.js';
@@ -48,7 +48,9 @@ export async function renderTrack(l) {
     <div class="field"><span>${tt(`${langName(l)} voice`, `صدای ${langName(l)}`)}</span><div class="row"><select id="voice" style="margin:0"></select><button class="ghost small" data-act="testvoice">${tt('Test', 'تست')}</button></div><div id="vwarn" class="msg warn"></div></div>
     <label class="check"><input type="checkbox" id="check" ${t.check ? 'checked' : ''}> 🎙 ${tt('Listen to me after each sentence and mark right/wrong', 'بعد از هر جمله صدایم را بشنود و درست/غلط را نشان بدهد')}</label>
     <div class="field" style="margin-top:6px"><span>${tt('Times to say and check each sentence', 'تعداد دفعه‌های گفتن و بررسی هر جمله')}</span><select id="checkReps">${[1, 2, 3].map(n => `<option value="${n}" ${n === (t.checkReps || 2) ? 'selected' : ''}>${tt(`${num(n)}×`, `${num(n)} بار`)}</option>`).join('')}</select>
-      <div class="msg">${speechNote}</div></div>
+      <div class="msg">${speechNote}</div>
+      <button class="ghost small" style="margin-top:6px" data-act="speechtest">🎙 ${tt('Test the speech check', 'تست بررسی گفتار')}</button>
+      <div class="sptest" id="sptest"></div></div>
     <label class="check"><input type="checkbox" id="warmup" ${t.warmup ? 'checked' : ''}> ${tt('Start each session by reviewing the last session', 'شروع هر جلسه با مرور جمله‌های جلسهٔ قبل')}</label>
     <p class="hint" id="lhint">${profileHint(t.level)}</p>
     <button class="ghost small danger" style="margin-top:12px" data-act="removelang">${tt(`Remove ${langName(l)}`, `حذف ${langName(l)}`)}</button>
@@ -98,6 +100,15 @@ export const actions = {
   jump: el => setPos(+el.dataset.s),
   setpos: () => setPos((+$('#posnum').value || 1) - 1),
   restart: () => setPos(0),
+  speechtest: async () => {
+    const out = $('#sptest'), l = ui.lang, sample = langInfo(l).hello;
+    unlockAudio();
+    out.innerHTML = `${tt('Say:', 'بگو:')} <b dir="auto">${esc(sample)}</b><br>🎙 ${tt('Listening…', 'در حال گوش دادن…')}`;
+    const r = await listenOnce(l, 9000, () => false, t => { out.innerHTML = `${tt('Say:', 'بگو:')} <b dir="auto">${esc(sample)}</b><br>🎙 ${esc(t)}`; });
+    if (r === null) out.textContent = recognitionBlocked() ? tt('❌ The microphone or speech recognition is not allowed. Check the browser\'s microphone permission (iPhone: also turn on Siri & Dictation).', '❌ اجازهٔ میکروفون یا تشخیص گفتار داده نشده. اجازهٔ میکروفون مرورگر را بررسی کن (آیفون: Siri و Dictation را هم روشن کن).') : tt('❌ This browser has no speech recognition. Use Chrome (Android) or Safari (iPhone).', '❌ این مرورگر تشخیص گفتار ندارد. Chrome (اندروید) یا Safari (آیفون) را امتحان کن.');
+    else if (r.text) out.innerHTML = `✅ ${tt('Heard:', 'شنیدم:')} <b dir="auto">${esc(r.text)}</b>`;
+    else out.textContent = r.error ? tt(`❌ Error: ${r.error}. Close other apps using the microphone and try again.`, `❌ خطا: ${r.error}. برنامه‌های دیگری که از میکروفون استفاده می‌کنند را ببند و دوباره امتحان کن.`) : tt('⚠ Heard nothing. Speak louder, closer to the phone, right after tapping.', '⚠ چیزی نشنیدم. بلندتر و نزدیک‌تر به گوشی، بلافاصله بعد از زدن دکمه بگو.');
+  },
   testvoice: () => { unlockAudio(); const t = S.tracks[ui.lang]; speak(langInfo(ui.lang).hello, t.speed, t); },
 };
 

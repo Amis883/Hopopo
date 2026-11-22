@@ -51,29 +51,53 @@ export function unlockAudio() { try { speechSynthesis.cancel(); const u = new Sp
 /* ---- speech recognition ---- */
 const SR = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
 export const recognitionSupported = () => !!SR;
-let blocked = false;
+let blocked = false, active = null;
 export const recognitionBlocked = () => blocked;
+/** Abort any running recognition right away (used when the learner pauses or leaves). */
+export function stopListening() { if (active) active(); }
 
 /**
- * Listens for one utterance. Resolves with the transcript ('' if silence),
- * or null when recognition is unavailable or the microphone was refused.
+ * Listens for one utterance.
+ * Resolves with { text, error }:
+ *   text  – what was heard ('' if nothing),
+ *   error – null, or a SpeechRecognition error code ('no-speech', 'audio-capture', 'network', …).
+ * Resolves with null when recognition is unavailable or the microphone was refused.
+ * Phones often end a recognition session early (before the learner starts talking);
+ * then it is restarted, as long as time remains.
  */
 export function listenOnce(lang, maxMs, isCancelled, onLive) {
   return new Promise(res => {
     if (!SR || blocked) { res(null); return; }
-    let r; try { r = new SR(); } catch (e) { res(null); return; }
-    r.lang = langInfo(lang).tts; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
-    let text = '', done = false, err = null;
+    const t0 = Date.now();
+    let text = '', err = null, done = false, r = null, restarts = 0;
     const finish = () => {
-      if (done) return; done = true; clearTimeout(maxT); clearInterval(watch);
-      try { r.abort(); } catch (e) { /* ignore */ }
-      if (err === 'not-allowed' || err === 'service-not-allowed') { blocked = true; res(null); } else res(text.trim());
+      if (done) return; done = true; active = null;
+      clearTimeout(maxT); clearInterval(watch);
+      try { if (r) r.abort(); } catch (e) { /* ignore */ }
+      if (err === 'not-allowed' || err === 'service-not-allowed') { blocked = true; res(null); return; }
+      res({ text: text.trim(), error: text.trim() ? null : (err === 'no-speech' || err === 'aborted' ? null : err) });
     };
-    r.onresult = e => { let t = ''; for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript + ' '; text = t; if (onLive) onLive(text.trim()); };
-    r.onerror = e => { err = e.error; finish(); };
-    r.onend = finish;
+    const start = () => {
+      try { r = new SR(); } catch (e) { err = 'unsupported'; finish(); return; }
+      r.lang = langInfo(lang).tts; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
+      r.onresult = e => {
+        let t = '';
+        for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript + ' ';
+        text = t; if (onLive) onLive(text.trim());
+      };
+      r.onerror = e => { err = e.error; if (err === 'not-allowed' || err === 'service-not-allowed' || err === 'audio-capture') finish(); };
+      r.onend = () => {
+        if (done) return;
+        const left = maxMs - (Date.now() - t0);
+        // ended before anything was heard: try again while there is time
+        if (!text.trim() && left > 1500 && restarts < 3 && !isCancelled()) { restarts++; setTimeout(() => { if (!done) start(); }, 150); return; }
+        finish();
+      };
+      try { r.start(); } catch (e) { err = 'start-failed'; finish(); }
+    };
     const maxT = setTimeout(finish, maxMs);
     const watch = setInterval(() => { if (isCancelled()) finish(); }, 100);
-    try { r.start(); } catch (e) { err = 'start'; finish(); }
+    active = finish;
+    start();
   });
 }

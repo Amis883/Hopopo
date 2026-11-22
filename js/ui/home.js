@@ -7,6 +7,7 @@ import { app, esc, ui, isFramed, isStandalone, toast } from './dom.js';
 import { renderTrack } from './track.js';
 
 export function renderHome() {
+  if (!S.order.length) return import('./welcome.js').then(m => m.renderWelcome());
   ui.view = 'home'; ui.lang = null;
   const today = new Intl.DateTimeFormat(locale(), { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
   app.innerHTML = `
