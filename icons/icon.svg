@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#1d2433"/>
+  <!-- crest: sound-wave feathers -->
+  <g stroke-linecap="round" stroke-width="22" fill="none">
+    <line x1="300" y1="196" x2="178" y2="104" stroke="#f0a640"/>
+    <line x1="306" y1="190" x2="214" y2="70"  stroke="#f0a640"/>
+    <line x1="314" y1="186" x2="262" y2="56"  stroke="#6b9bff"/>
+    <line x1="322" y1="184" x2="312" y2="74"  stroke="#6b9bff"/>
+    <line x1="330" y1="186" x2="352" y2="112" stroke="#6b9bff"/>
+  </g>
+  <!-- tail -->
+  <path d="M120 330 L40 420 L78 432 L150 372 Z" fill="#f4ead8"/>
+  <path d="M60 398 L96 420" stroke="#1d2433" stroke-width="12" stroke-linecap="round"/>
+  <!-- body + head -->
+  <ellipse cx="225" cy="318" rx="128" ry="82" transform="rotate(-22 225 318)" fill="#eea25b"/>
+  <circle cx="320" cy="238" r="64" fill="#eea25b"/>
+  <!-- striped wing -->
+  <clipPath id="w"><ellipse cx="196" cy="332" rx="104" ry="48" transform="rotate(-22 196 332)"/></clipPath>
+  <g clip-path="url(#w)">
+    <rect x="80" y="260" width="240" height="140" fill="#f4ead8"/>
+    <g stroke="#1d2433" stroke-width="20">
+      <line x1="110" y1="260" x2="150" y2="400"/><line x1="150" y1="250" x2="190" y2="390"/>
+      <line x1="190" y1="240" x2="230" y2="380"/><line x1="230" y1="230" x2="270" y2="370"/>
+    </g>
+  </g>
+  <!-- beak + eye -->
+  <path d="M374 244 Q430 262 474 320" stroke="#f4ead8" stroke-width="14" fill="none" stroke-linecap="round"/>
+  <circle cx="338" cy="228" r="10" fill="#1d2433"/>
+</svg>
