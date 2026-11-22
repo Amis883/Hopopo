@@ -163,3 +163,14 @@ input[type=range]{width:100%;accent-color:var(--acc)}
 .pill span{display:block;text-align:center;border:1px solid var(--line);border-radius:12px;padding:8px 0;font-weight:700}
 .pill input:checked+span{background:var(--ink);color:var(--bg)}
 .sptest{margin-top:8px;font-size:.9rem}
+details.help{padding:0}
+details.help summary{cursor:pointer;font-weight:700;padding:14px 16px;list-style:none;display:flex;gap:10px;align-items:center}
+details.help summary::-webkit-details-marker{display:none}
+details.help summary::after{content:"+";margin-inline-start:auto;color:var(--muted);font-weight:400;font-size:1.2rem}
+details.help[open] summary::after{content:"–"}
+.helpbody{padding:0 16px 14px;font-size:.93rem}
+.helpbody ul,.helpbody ol{padding-inline-start:20px;margin:6px 0}
+.helpbody li{margin-bottom:6px}
+.helplang{border-top:1px solid var(--line);padding-top:8px;margin-top:8px}
+.helplang:first-child{border-top:0;margin-top:0;padding-top:0}
+.okc{color:var(--ok);font-weight:700}.closec{color:var(--de);font-weight:700}.badc{color:var(--danger);font-weight:700}

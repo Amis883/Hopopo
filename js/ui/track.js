@@ -27,7 +27,7 @@ export async function renderTrack(l) {
     : isFramed ? tt('The speech check only works in the installed version; here you get a pause to repeat instead.', 'بررسی گفتار فقط در نسخهٔ نصب‌شده کار می‌کند؛ اینجا به‌جایش فرصت تکرار داری.')
     : tt('Asks for microphone permission the first time.', 'بار اول اجازهٔ میکروفون می‌خواهد.');
   app.innerHTML = `<div style="--acc:${trackColor(l, S.order.indexOf(l))}">
-  <header class="top"><button class="icon" data-act="home" aria-label="Back">${tt('←', '→')}</button><h2>${langName(l)}${L.native !== langName(l) ? ' – ' + esc(L.native) : ''}</h2></header>
+  <header class="top"><button class="icon" data-act="home" aria-label="Back">${tt('←', '→')}</button><h2 style="flex:1">${langName(l)}${L.native !== langName(l) ? ' – ' + esc(L.native) : ''}</h2><button class="langbtn" data-act="help" aria-label="${tt('Guide', 'راهنما')}">❓</button></header>
   <section class="card"><h3>${tt('Books', 'کتاب‌ها')}</h3>
     ${books.length ? books.map(([id, b]) => `<div class="bookitem ${id === t.bookId ? 'active' : ''}">
       <button data-act="selbook" data-id="${id}">${b.kind === 'audio' ? '🎧 ' : ''}<bdi>${esc(b.title)}</bdi><small>${tt(`${num(b.pos)} of ${num(b.total || 0)} sentences`, `${num(b.pos)} از ${num(b.total || 0)} جمله`)}</small></button>

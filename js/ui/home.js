@@ -13,7 +13,7 @@ export function renderHome() {
   ui.view = 'home'; ui.lang = null;
   const today = new Intl.DateTimeFormat(locale(), { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
   app.innerHTML = `
-  <header class="top"><img src="icons/icon.svg" alt="" width="48" height="48" style="border-radius:12px"><div class="grow"><h1>Hopopo</h1><p class="sub">${tt('Daily shadowing', 'شادوینگ روزانه')} – ${today}</p></div><button class="langbtn" data-act="uilang" aria-label="Language">${getUI() === 'fa' ? 'EN' : 'فا'}</button></header>
+  <header class="top"><img src="icons/icon.svg" alt="" width="48" height="48" style="border-radius:12px"><div class="grow"><h1>Hopopo</h1><p class="sub">${tt('Daily shadowing', 'شادوینگ روزانه')} – ${today}</p></div><button class="langbtn" data-act="help" aria-label="${tt('Guide', 'راهنما')}">❓</button><button class="langbtn" data-act="uilang" aria-label="Language">${getUI() === 'fa' ? 'EN' : 'فا'}</button></header>
   ${S.order.map((l, i) => trackCard(l, i)).join('')}
   ${addLanguageCard()}
   ${installCard()}
