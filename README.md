@@ -7,7 +7,7 @@
 
 ## فارسی
 
-**Hopopo** یک اپ وب نصب‌شدنی (PWA) برای تمرین روزانهٔ **شادوینگ** است، با دو مسیر جدا برای انگلیسی و آلمانی.
+**Hopopo** یک اپ وب نصب‌شدنی (PWA) برای تمرین روزانهٔ **شادوینگ** است، با دو مسیر جدا برای انگلیسی و آلمانی. زبان خود اپ انگلیسی یا فارسی است و با دکمهٔ «فا / EN» در صفحهٔ اول عوض می‌شود.
 
 - **کتاب خودت:** عکس صفحه‌ها، PDF (اسکن‌شده یا متنی)، EPUB یا TXT را وارد کن. متن عکس‌ها روی خود گوشی خوانده می‌شود (OCR).
 - **انتخاب متن‌های مفید:** گفت‌وگوها، متن‌های خواندنی و جمله‌های روزمره نگه داشته می‌شوند و تمرین‌ها، جای‌خالی‌ها و فهرست لغت کنار می‌روند.
@@ -25,7 +25,7 @@
 
 ## English
 
-**Hopopo** is an installable web app for daily **shadowing** practice in English and German, with a separate track, level and progress for each language.
+**Hopopo** is an installable web app for daily **shadowing** practice in English and German, with a separate track, level and progress for each language. The interface is in English or Persian (toggle on the home screen).
 
 - Import your own textbook: page photos, scanned or text PDFs, EPUB or TXT. OCR runs on the device (Tesseract.js, bundled).
 - Keeps dialogues, reading texts and everyday phrases, and skips exercises and word lists.

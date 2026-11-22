@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="fa" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Hopopo — شادوینگ روزانه</title>
-<meta name="description" content="تمرین روزانهٔ شادوینگ انگلیسی و آلمانی از روی کتاب خودت">
+<title>Hopopo — Daily shadowing</title>
+<meta name="description" content="Daily shadowing practice for English and German from your own textbook">
 <meta name="theme-color" content="#1d2433">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
@@ -27,7 +27,10 @@
 }
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--ink)}
-body{font-family:Vazirmatn,system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif;line-height:1.7;-webkit-tap-highlight-color:transparent;
+body{font-family:system-ui,-apple-system,"Segoe UI",Vazirmatn,Tahoma,sans-serif;font-family:var(--uifont)}
+html[lang=fa] body{--uifont:Vazirmatn,system-ui,Tahoma,sans-serif}
+html[lang=en] body{--uifont:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body{font-family:var(--uifont,Vazirmatn),system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif;line-height:1.7;-webkit-tap-highlight-color:transparent;
   padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 #app{max-width:560px;margin:0 auto;padding:16px 16px 40px}
 button,input,select,textarea{font:inherit;color:inherit}
@@ -37,6 +40,8 @@ h2{font-size:1.2rem;margin:0}
 h3{font-size:1rem;margin:0 0 10px}
 .sub{margin:0;color:var(--muted);font-size:.9rem}
 .top{display:flex;align-items:center;gap:10px;margin:8px 0 18px}
+.top .grow{flex:1}
+.langbtn{border:1px solid var(--line);border-radius:12px;padding:6px 12px;font-weight:700;background:var(--card)}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:14px;box-shadow:var(--shadow)}
 .track{border-top:5px solid var(--acc)}
 .trow{display:flex;justify-content:space-between;align-items:center}
@@ -63,7 +68,7 @@ h3{font-size:1rem;margin:0 0 10px}
 .note p{margin:6px 0 10px;color:var(--muted)}
 .foot{text-align:center;color:var(--muted);font-size:.85rem}
 .bookitem{display:flex;gap:8px;align-items:center;margin-bottom:8px}
-.bookitem>button:first-child{flex:1;text-align:right;border:1px solid var(--line);border-radius:14px;padding:10px 12px;background:var(--bg)}
+.bookitem>button:first-child{flex:1;text-align:start;border:1px solid var(--line);border-radius:14px;padding:10px 12px;background:var(--bg)}
 .bookitem.active>button:first-child{border:2px solid var(--acc);background:var(--card)}
 .bookitem small{display:block;color:var(--muted);font-size:.8rem}
 .del.confirm{width:auto;padding:0 10px;font-size:.85rem;color:#fff;background:var(--danger);border-color:var(--danger)}
@@ -82,7 +87,7 @@ textarea{resize:vertical;font-family:Literata,serif}
 .preview{font-family:Literata,serif;background:var(--bg);border-radius:12px;padding:10px 12px;margin:0 0 10px;font-size:.95rem;text-align:left}
 .results{margin:8px 0}
 .res{display:block;width:100%;text-align:left;font-family:Literata,serif;font-size:.88rem;border-bottom:1px solid var(--line);padding:8px 4px}
-.res em{font-style:normal;color:var(--muted);font-family:Vazirmatn,sans-serif;font-size:.78rem;float:right}
+.res em{font-style:normal;color:var(--muted);font-family:Vazirmatn,sans-serif;font-size:.78rem;float:inline-end;margin-inline-start:8px}
 .field{margin-bottom:14px}
 .field>span{display:flex;justify-content:space-between;font-size:.92rem;margin-bottom:4px}
 .field>span output{font-weight:700;color:var(--acc)}
@@ -166,8 +171,8 @@ input[type=range]{width:100%;accent-color:var(--acc)}
 'use strict';
 /* ---------- constants ---------- */
 const LANGS = {
-  en:{name:'English', fa:'انگلیسی', code:'en-US', prefix:'en', wps:2.6, flag:'EN', color:'var(--en)'},
-  de:{name:'Deutsch', fa:'آلمانی',  code:'de-DE', prefix:'de', wps:2.2, flag:'DE', color:'var(--de)'}
+  en:{name:'English', get fa(){ return tt('English','انگلیسی'); }, code:'en-US', prefix:'en', wps:2.6, flag:'EN', color:'var(--en)'},
+  de:{name:'Deutsch', get fa(){ return tt('German','آلمانی'); },  code:'de-DE', prefix:'de', wps:2.2, flag:'DE', color:'var(--de)'}
 };
 // phase types: listen | echo (listen, then repeat in the gap) | shadow (speak along) ; blind = text hidden
 const PROFILES = {
@@ -177,7 +182,7 @@ const PROFILES = {
   B2:{maxWords:22, phases:[{t:'listen',r:1},{t:'shadow',r:1},{t:'shadow',r:1.05,blind:true}], finalRate:1},
   C1:{maxWords:30, phases:[{t:'listen',r:1.05},{t:'shadow',r:1.05},{t:'shadow',r:1.1,blind:true}], finalRate:1.05}
 };
-const PHASE_TXT = {
+const PHASE_FA = {
   listen:['فقط گوش بده','به آهنگ، تکیه و مکث‌های جمله دقت کن.'],
   echo:['گوش بده، بعد تکرار کن','وقتی صدا تمام شد، همان جمله را بلند و با همان آهنگ بگو.'],
   shadow:['همزمان بخوان','هم‌زمان با صدا (یا نیم‌ثانیه پشتش) بلند بخوان.'],
@@ -186,13 +191,22 @@ const PHASE_TXT = {
   final:['شادوینگ پیوسته','کل متن امروز پشت سر هم پخش می‌شود؛ بدون توقف همراهش بخوان.'],
   review:['مرور جلسهٔ قبل','گرم کردن با آخرین جمله‌های دفعهٔ پیش؛ همزمان بخوان.']
 };
-const WD = ['ی','د','س','چ','پ','ج','ش'];
+const PHASE_EN = {
+  listen:['Just listen','Notice the melody, stress and pauses of the sentence.'],
+  echo:['Listen, then repeat','When the audio stops, say the same sentence aloud with the same melody.'],
+  shadow:['Speak along','Speak aloud together with the audio (or half a second behind it).'],
+  blind:['Shadow without text','The text is hidden; follow by ear only. Tap the card to peek.'],
+  check:['Listen, then say it','After the audio, say the sentence aloud. Correct words turn green, close ones orange, wrong or missing ones red.'],
+  final:['Continuous shadowing',"All of today's text plays back to back; speak along without stopping."],
+  review:['Review last session','Warm up with the last sentences from last time; speak along.']
+};
+const WD_FA = ['ی','د','س','چ','پ','ج','ش'], WD_EN = ['S','M','T','W','T','F','S'];
 const PDFJS = 'lib/pdf.min.js';
 const PDFJS_WORKER = 'lib/pdf.worker.min.js';
 const JSZIP = 'lib/jszip.min.js';
 
 const SAMPLES = {
-  de:{title:'نمونه: Mein Tag (A1)', text:
+  de:{title:'Sample: Mein Tag (A1)', text:
 `Ich heiße Lena. Ich bin dreißig Jahre alt. Ich wohne in Hamburg. Meine Wohnung ist klein, aber hell.
 
 Am Morgen stehe ich um sieben Uhr auf. Ich trinke einen Kaffee und esse ein Brötchen. Dann fahre ich mit dem Bus zur Arbeit. Ich arbeite in einem Büro. Meine Kollegen sind nett.
@@ -221,7 +235,9 @@ let view='home', curLang=null;
 const app = document.getElementById('app');
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const fa = n => Number(n).toLocaleString('fa-IR');
+const fa = n => Number(n).toLocaleString(UI==='fa'?'fa-IR':'en-US');
+const tt = (en, faTxt) => UI==='fa' ? faTxt : en;
+const loc = () => UI==='fa' ? 'fa-IR' : 'en-US';
 const wc = s => s.split(/\s+/).filter(Boolean).length;
 const pad = n => String(n).padStart(2,'0');
 const mmss = sec => { sec=Math.max(0,Math.round(sec)); return `${pad(Math.floor(sec/60))}:${pad(sec%60)}`; };
@@ -244,6 +260,10 @@ function loadState(){
   return {tracks:{en:defTrack('en'), de:defTrack('de')}};
 }
 let S = loadState();
+for(const k of ['en','de']){ const sm=S.tracks[k].books['sample-'+k]; if(sm) sm.title=SAMPLES[k].title; }
+let UI = S.ui || 'en';
+function applyUI(){ document.documentElement.lang=UI; document.documentElement.dir = UI==='fa'?'rtl':'ltr'; }
+applyUI();
 function save(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(S)); }catch(e){} }
 
 const DB = (()=>{
@@ -343,7 +363,7 @@ async function importSentences(lang, title, sentences, appendId){
     const book = await getBook(lang, appendId), meta = S.tracks[lang].books[appendId];
     if(book && meta){ book.sentences = book.sentences.concat(sentences); await DB.put('book:'+appendId, book); meta.total = book.sentences.length; save(); return sentences.length; }
   }
-  if(sentences.length < 3) throw new Error('متن قابل‌استفاده‌ای پیدا نشد. اگر PDF اسکن‌شده (عکس) است، متنش قابل خواندن نیست.');
+  if(sentences.length < 3) throw new Error(tt('No usable text found.','متن قابل‌استفاده‌ای پیدا نشد.'));
   const id = 'b'+Date.now().toString(36);
   await DB.put('book:'+id, {id, lang, title, sentences});
   bookCache.set(id, {id, lang, title, sentences});
@@ -352,7 +372,7 @@ async function importSentences(lang, title, sentences, appendId){
   t.bookId = id; save();
   return sentences.length;
 }
-function loadScript(src){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=()=>rej(new Error('بارگذاری کتابخانه ناموفق بود (اینترنت را چک کن).')); document.head.appendChild(s); }); }
+function loadScript(src){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=()=>rej(new Error(tt('Could not load a library (check your connection).','بارگذاری کتابخانه ناموفق بود (اینترنت را چک کن).'))); document.head.appendChild(s); }); }
 async function openPdf(file){
   if(!window.pdfjsLib){ await loadScript(PDFJS_WORKER); await loadScript(PDFJS); }
   pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(PDFJS_WORKER, location.href).href;
@@ -418,7 +438,7 @@ async function imageCanvas(file){
   let img, w, h;
   try{ img = await createImageBitmap(file); w=img.width; h=img.height; }
   catch(e){
-    img = await new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=()=>rej(new Error(`عکس «${file.name}» باز نشد. اگر HEIC است، آن را JPG کن.`)); im.src=URL.createObjectURL(file); });
+    img = await new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=()=>rej(new Error(tt(`Could not open "${file.name}". If it is HEIC, convert it to JPG.`,`عکس «${file.name}» باز نشد. اگر HEIC است، آن را JPG کن.`))); im.src=URL.createObjectURL(file); });
     w=img.naturalWidth; h=img.naturalHeight;
   }
   const sc=Math.min(1, 2400/Math.max(w,h)), c=document.createElement('canvas');
@@ -435,7 +455,7 @@ async function pdfPageCanvas(page){
 // sources: array of async () => canvas
 async function runOcr(lang, sources, label){
   const msg=$('#impmsg'), stop=$('#ocrstop');
-  msg.className='msg'; msg.textContent='در حال آماده‌سازی تشخیص متن (بار اول کمی طول می‌کشد)…';
+  msg.className='msg'; msg.textContent=tt('Preparing text recognition (the first time takes a moment)…','در حال آماده‌سازی تشخیص متن (بار اول کمی طول می‌کشد)…');
   ocrCancel=false; if(stop) stop.classList.remove('hidden');
   const out=[]; let n=0;
   try{
@@ -443,8 +463,8 @@ async function runOcr(lang, sources, label){
     for(let i=0;i<sources.length;i++){
       if(ocrCancel) break;
       const lbl = label(i);
-      ocrLog = m=>{ if(m.status==='recognizing text' && $('#impmsg')) $('#impmsg').textContent=`تشخیص متن: ${lbl} (${fa(i+1)} از ${fa(sources.length)}) — ${fa(Math.round(m.progress*100))}٪`; };
-      if(msg.isConnected) msg.textContent=`تشخیص متن: ${lbl} (${fa(i+1)} از ${fa(sources.length)})`;
+      ocrLog = m=>{ if(m.status==='recognizing text' && $('#impmsg')) $('#impmsg').textContent=tt(`Reading text: ${lbl} (${fa(i+1)} of ${fa(sources.length)}) — ${fa(Math.round(m.progress*100))}%`,`تشخیص متن: ${lbl} (${fa(i+1)} از ${fa(sources.length)}) — ${fa(Math.round(m.progress*100))}٪`); };
+      if(msg.isConnected) msg.textContent=tt(`Reading text: ${lbl} (${fa(i+1)} of ${fa(sources.length)})`,`تشخیص متن: ${lbl} (${fa(i+1)} از ${fa(sources.length)})`);
       const canvas = await sources[i]();
       const {data} = await w.recognize(canvas);
       out.push((data.text||'').trim()); n++;
@@ -452,18 +472,10 @@ async function runOcr(lang, sources, label){
   } finally { ocrLog=null; if(stop) stop.classList.add('hidden'); }
   return {text:out.join('\n\n'), pages:n, cancelled:ocrCancel};
 }
-function showReview(text, title, pages, cancelled){
-  const ta=$('#btext'), ti=$('#btitle'), msg=$('#impmsg');
-  if(!ta) return;
-  ta.value = (ta.value.trim() ? ta.value.trim()+'\n\n' : '') + text;
-  if(!ti.value.trim()) ti.value=title;
-  msg.className='msg';
-  msg.textContent = `✓ متن ${fa(pages)} صفحه تشخیص داده شد${cancelled?' (متوقف شد)':''}. متن بالا را مرور کن، اشتباه‌ها و تیترها/تمرین‌های اضافه را پاک کن، بعد «افزودن متن» را بزن.`;
-  ta.scrollIntoView({behavior:'smooth', block:'center'});
-}
 
 /* ---------- smart selection of shadowing material ---------- */
 const TYPE_FA = {dialogue:'گفت‌وگو', reading:'متن خواندنی', phrases:'جمله‌های کاربردی', routine:'روتین روزانه'};
+const TYPE_EN = {dialogue:'Dialogue', reading:'Reading', phrases:'Useful phrases', routine:'Daily routine'};
 let sampleP=null, PICKS=null;
 function getSample(){
   if(!sampleP) sampleP = (async()=>{ try{ if(!window.claude || typeof window.claude.use!=='function') return null; return (await window.claude.use('sample')) || null; }catch(e){ return null; } })();
@@ -476,7 +488,7 @@ function canvasBlob(c){
   return new Promise(res=>src.toBlob(b=>res(b),'image/jpeg',0.85));
 }
 function smartPrompt(langName, level, mode){
-  return `You are helping a Persian-speaking learner practise ${langName} with the shadowing method (listen and repeat aloud along with audio). Their level is ${level}.
+  return `You are helping a ${UI==='fa'?'Persian-speaking ':''}learner practise ${langName} with the shadowing method (listen and repeat aloud along with audio). Their level is ${level}.
 Below ${mode==='images' ? 'are photos/scans of pages from one lesson of their textbook' : 'is the text of one lesson of their textbook, produced by OCR, so it may contain recognition errors'}.
 
 Select ONLY the material worth shadowing:
@@ -491,9 +503,9 @@ Rules:
 - Remove speaker labels ("A:", "Anna:") and list numbering, but keep each spoken turn or phrase on its own line.
 - Every line must be a full sentence ending with . ! or ? (add a final period to a phrase if missing).
 ${/A1|A2/.test(level) ? '- The learner is a beginner: prefer short, high-frequency, immediately useful sentences.\n' : ''}- Keep the book's order. At most 12 items.
-- For each item: "type" = dialogue | reading | phrases | routine; "title" = short title in ${langName}; "note_fa" = one short Persian sentence saying what it is useful for; "text" = the lines joined with \\n.
+- For each item: "type" = dialogue | reading | phrases | routine; "title" = short title in ${langName}; "note" = one short ${UI==='fa'?'Persian':'English'} sentence saying what it is useful for; "text" = the lines joined with \\n.
 
-Answer with JSON only: {"lesson": "lesson name/number if visible, else empty", "items": [{"type": "...", "title": "...", "note_fa": "...", "text": "..."}]}. If nothing is suitable, return an empty items array.`;
+Answer with JSON only: {"lesson": "lesson name/number if visible, else empty", "items": [{"type": "...", "title": "...", "note": "...", "text": "..."}]}. If nothing is suitable, return an empty items array.`;
 }
 async function smartExtract({text, images, maxImgs}){
   const smp=await getSample(); if(!smp) throw new Error('unavailable');
@@ -508,11 +520,11 @@ async function smartExtract({text, images, maxImgs}){
   let lesson='', items=[];
   if(images){
     for(let i=0;i<images.length;i+=maxImgs){
-      say(`✨ Claude دارد صفحه‌ها را می‌خواند و متن‌های مفید را جدا می‌کند (${fa(Math.min(i+maxImgs,images.length))} از ${fa(images.length)})…`);
+      say(tt(`✨ Claude is reading the pages and picking useful texts (${fa(Math.min(i+maxImgs,images.length))} of ${fa(images.length)})…`,`✨ Claude دارد صفحه‌ها را می‌خواند و متن‌های مفید را جدا می‌کند (${fa(Math.min(i+maxImgs,images.length))} از ${fa(images.length)})…`));
       const v=await ask('', images.slice(i,i+maxImgs)); if(!lesson && v.lesson) lesson=v.lesson; items=items.concat(Array.isArray(v.items)?v.items:[]);
     }
   } else {
-    say('✨ Claude دارد متن‌های مفید برای شادوینگ را جدا می‌کند…');
+    say(tt('✨ Claude is picking texts that are good for shadowing…','✨ Claude دارد متن‌های مفید برای شادوینگ را جدا می‌کند…'));
     const v=await ask(text); lesson=v.lesson||''; items=Array.isArray(v.items)?v.items:[];
   }
   items = items.filter(x=>x && typeof x.text==='string' && x.text.trim());
@@ -527,21 +539,21 @@ function heuristicPick(raw){
     const toks=p.split(/\s+/); if(toks.filter(w=>/\d/.test(w)).length/toks.length>0.3) return false;
     return true;
   });
-  return keep.length ? [{type:'reading', title:'Auswahl', note_fa:'انتخاب خودکار ساده؛ قبل از افزودن یک نگاه بینداز.', text:keep.join('\n')}] : [];
+  return keep.length ? [{type:'reading', title:'Auswahl', note:tt('Simple automatic selection; have a look before adding.','انتخاب خودکار ساده؛ قبل از افزودن یک نگاه بینداز.'), text:keep.join('\n')}] : [];
 }
 function showPicks(res, title){
   PICKS={...res, title};
   const box=$('#picks'); if(!box) return;
   if(!res.items.length){
-    box.innerHTML=''; say('متن مناسبی برای شادوینگ پیدا نشد. متن کامل را در کادر پایین گذاشتم تا خودت انتخاب کنی.', true);
+    box.innerHTML=''; say(tt('No text suitable for shadowing was found. I put the full text in the box below so you can choose.','متن مناسبی برای شادوینگ پیدا نشد. متن کامل را در کادر پایین گذاشتم تا خودت انتخاب کنی.'), true);
     if(res.raw) $('#btext').value=res.raw; return;
   }
   say('');
-  box.innerHTML = `<div class="picks"><div class="pickhead">✨ ${fa(res.items.length)} متن مناسب شادوینگ پیدا شد${res.lesson?` — <bdi>${esc(res.lesson)}</bdi>`:''}
-      ${res.heuristic?'<small>این انتخاب با فیلتر سادهٔ داخلی انجام شد. داخل Claude، خود Claude متن‌ها را دقیق‌تر انتخاب می‌کند.</small>':'<small>تیک هرکدام را که نمی‌خواهی بردار.</small>'}</div>
-    ${res.items.map((it,i)=>`<label class="pick"><input type="checkbox" checked data-pick="${i}"><div><span class="badge">${TYPE_FA[it.type]||'متن'}</span> <b dir="ltr">${esc(it.title||'')}</b>${it.note_fa?`<small>${esc(it.note_fa)}</small>`:''}<div class="ptext" dir="ltr">${esc(it.text).replace(/\n/g,'<br>')}</div></div></label>`).join('')}
-    <button class="primary" data-act="addpicks">افزودن متن‌های انتخاب‌شده</button>
-    <div class="btnrow" style="margin-top:8px"><button class="ghost small" data-act="editpicks">ویرایش قبل از افزودن</button>${res.raw?'<button class="ghost small" data-act="rawtext">نمایش متن کامل</button>':''}</div></div>`;
+  box.innerHTML = `<div class="picks"><div class="pickhead">✨ ${tt(`${fa(res.items.length)} texts good for shadowing`,`${fa(res.items.length)} متن مناسب شادوینگ پیدا شد`)}${res.lesson?` — <bdi>${esc(res.lesson)}</bdi>`:''}
+      <small>${res.heuristic?tt('Picked by the simple built-in filter. Inside Claude, Claude picks texts more precisely.','این انتخاب با فیلتر سادهٔ داخلی انجام شد. داخل Claude، خود Claude متن‌ها را دقیق‌تر انتخاب می‌کند.'):tt('Untick anything you don\'t want.','تیک هرکدام را که نمی‌خواهی بردار.')}</small></div>
+    ${res.items.map((it,i)=>`<label class="pick"><input type="checkbox" checked data-pick="${i}"><div><span class="badge">${(UI==='fa'?TYPE_FA:TYPE_EN)[it.type]||tt('Text','متن')}</span> <b dir="ltr">${esc(it.title||'')}</b>${(it.note||it.note_fa)?`<small>${esc(it.note||it.note_fa)}</small>`:''}<div class="ptext" dir="ltr">${esc(it.text).replace(/\n/g,'<br>')}</div></div></label>`).join('')}
+    <button class="primary" data-act="addpicks">${tt('Add selected texts','افزودن متن‌های انتخاب‌شده')}</button>
+    <div class="btnrow" style="margin-top:8px"><button class="ghost small" data-act="editpicks">${tt('Edit before adding','ویرایش قبل از افزودن')}</button>${res.raw?`<button class="ghost small" data-act="rawtext">${tt('Show full text','نمایش متن کامل')}</button>`:''}</div></div>`;
   const ti=$('#btitle'); if(ti && !ti.value.trim()) ti.value = res.lesson || title;
   box.scrollIntoView({behavior:'smooth', block:'start'});
 }
@@ -551,7 +563,7 @@ function pickedText(){
 }
 async function pickFromText(text, title){
   const smp = await getSample();
-  if(smp){ try{ return showPicks(await smartExtract({text}), title); }catch(e){ if(e && e.code==='rate_limited') toast('Claude فعلاً مشغول است؛ از فیلتر داخلی استفاده شد.'); } }
+  if(smp){ try{ return showPicks(await smartExtract({text}), title); }catch(e){ if(e && e.code==='rate_limited') toast(tt('Claude is busy right now; used the built-in filter.','Claude فعلاً مشغول است؛ از فیلتر داخلی استفاده شد.')); } }
   showPicks({lesson:'', items:heuristicPick(text), heuristic:true, raw:text}, title);
 }
 async function processPages(sources, label, title){
@@ -560,7 +572,7 @@ async function processPages(sources, label, title){
   if(maxImgs){
     try{
       const blobs=[];
-      for(let i=0;i<sources.length;i++){ say(`آماده‌سازی ${label(i)} (${fa(i+1)} از ${fa(sources.length)})…`); blobs.push(await canvasBlob(await sources[i]())); }
+      for(let i=0;i<sources.length;i++){ say(tt(`Preparing ${label(i)} (${fa(i+1)} of ${fa(sources.length)})…`,`آماده‌سازی ${label(i)} (${fa(i+1)} از ${fa(sources.length)})…`)); blobs.push(await canvasBlob(await sources[i]())); }
       return showPicks(await smartExtract({images:blobs, maxImgs}), title);
     }catch(e){ /* fall back to on-device OCR */ }
   }
@@ -575,11 +587,11 @@ function parsePack(text){
 }
 async function importPack(p){
   const sents=p.sentences.filter(x=>typeof x==='string' && x.trim()).map(x=>x.trim());
-  if(!sents.length) throw new Error('این بسته خالی است.');
-  const lang=p.lang, title=String(p.title||'بستهٔ شادوینگ');
+  if(!sents.length) throw new Error(tt('This pack is empty.','این بسته خالی است.'));
+  const lang=p.lang, title=String(p.title||tt('Shadowing pack','بستهٔ شادوینگ'));
   const ap=$('#append'); const appendId = (lang===curLang && ap && ap.checked) ? S.tracks[lang].bookId : null;
   const n=await importSentences(lang, title, sents, appendId);
-  toast(`✓ «${title}» (${fa(n)} جمله) به ${LANGS[lang].fa} اضافه شد`, 4500);
+  toast(tt(`✓ "${title}" (${fa(n)} sentences) added to ${LANGS[lang].fa}`,`✓ «${title}» (${fa(n)} جمله) به ${LANGS[lang].fa} اضافه شد`), 4500);
   renderTrack(lang);
 }
 async function shareBook(id){
@@ -590,10 +602,10 @@ async function shareBook(id){
     const file=new File([json], fname, {type:'application/json'});
     try{ if(navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file], title:m.title}); return; } }catch(e){ if(e && e.name==='AbortError') return; }
     const a=document.createElement('a'); a.href=URL.createObjectURL(file); a.download=fname; document.body.appendChild(a); a.click(); a.remove();
-    toast('فایل بسته ذخیره شد؛ برای دوستت بفرست.', 4500); return;
+    toast(tt('Pack file saved — send it to your friend.','فایل بسته ذخیره شد؛ برای دوستت بفرست.'), 4500); return;
   }
-  try{ await navigator.clipboard.writeText(json); toast('بسته کپی شد. برای دوستت بفرست؛ او آن را در کادر متن اپ می‌چسباند و «افزودن همهٔ متن» را می‌زند.', 6500); }
-  catch(e){ toast('کپی ممکن نشد.'); }
+  try{ await navigator.clipboard.writeText(json); toast(tt('Pack copied. Send it to your friend; they paste it into the app\'s text box and tap "Add all text".','بسته کپی شد. برای دوستت بفرست؛ او آن را در کادر متن اپ می‌چسباند و «افزودن همهٔ متن» را می‌زند.'), 6500); }
+  catch(e){ toast(tt('Could not copy.','کپی ممکن نشد.')); }
 }
 
 /* ---------- planning ---------- */
@@ -704,7 +716,7 @@ function stats(t){
   const days = new Set(t.history.map(h=>h.d)), today=dayKey();
   let streak=0; const d=new Date(); if(!days.has(today)) d.setDate(d.getDate()-1);
   while(days.has(dayKey(d))){ streak++; d.setDate(d.getDate()-1); }
-  const week=[]; for(let i=6;i>=0;i--){ const x=new Date(); x.setDate(x.getDate()-i); week.push({done:days.has(dayKey(x)), today:i===0, label:WD[x.getDay()]}); }
+  const week=[]; for(let i=6;i>=0;i--){ const x=new Date(); x.setDate(x.getDate()-i); week.push({done:days.has(dayKey(x)), today:i===0, label:(UI==='fa'?WD_FA:WD_EN)[x.getDay()]}); }
   const todaySec = t.history.filter(h=>h.d===today).reduce((a,h)=>a+h.sec,0);
   return {streak, week, todaySec, doneToday: todaySec >= Math.min(600, t.minutes*60*0.6)};
 }
@@ -717,83 +729,85 @@ const isStandalone = () => (window.matchMedia && matchMedia('(display-mode: stan
 
 function renderHome(){
   view='home'; curLang=null;
-  const today = new Intl.DateTimeFormat('fa-IR',{weekday:'long', day:'numeric', month:'long'}).format(new Date());
+  const today = new Intl.DateTimeFormat(loc(),{weekday:'long', day:'numeric', month:'long'}).format(new Date());
   app.innerHTML = `
-  <header class="top"><img src="icons/icon.svg" alt="" width="48" height="48" style="border-radius:12px"><div><h1>Hopopo</h1><p class="sub">شادوینگ روزانه – ${today}</p></div></header>
+  <header class="top"><img src="icons/icon.svg" alt="" width="48" height="48" style="border-radius:12px"><div class="grow"><h1>Hopopo</h1><p class="sub">${tt('Daily shadowing','شادوینگ روزانه')} – ${today}</p></div><button class="langbtn" data-act="uilang" aria-label="Language">${UI==='fa'?'EN':'فا'}</button></header>
   ${['en','de'].map(trackCard).join('')}
   ${installCard()}
-  <p class="foot">کم، ولی هر روز. ۱۰ تا ۲۰ دقیقه کافی است.</p>`;
+  <p class="foot">${tt('A little, every day. 10–20 minutes is enough.','کم، ولی هر روز. ۱۰ تا ۲۰ دقیقه کافی است.')}</p>`;
 }
 function trackCard(lang){
   const t=S.tracks[lang], L=LANGS[lang], b=t.books[t.bookId], st=stats(t);
   const pct = b && b.total ? Math.min(100, Math.round(100*b.pos/b.total)) : 0;
   return `<section class="card track" style="--acc:${L.color}">
-    <div class="trow"><div class="lang"><span class="code">${L.flag}</span><div><b>${L.fa}</b><small>${L.name} – سطح ${t.level}</small></div></div>
-    <div class="streak" title="روزهای پشت‌سرهم">🔥 ${fa(st.streak)}</div></div>
-    <div class="book">📖 <bdi>${esc(b ? b.title : 'هنوز کتابی انتخاب نشده')}</bdi></div>
+    <div class="trow"><div class="lang"><span class="code">${L.flag}</span><div><b>${L.fa}</b><small>${UI==='fa'||lang==='de' ? L.name+' – ' : ''}${tt('Level','سطح')} ${t.level}</small></div></div>
+    <div class="streak" title="${tt('Days in a row','روزهای پشت‌سرهم')}">🔥 ${fa(st.streak)}</div></div>
+    <div class="book">📖 <bdi>${esc(b ? b.title : tt('No book selected yet','هنوز کتابی انتخاب نشده'))}</bdi></div>
     <div class="bar"><i style="width:${pct}%"></i></div>
-    <div class="meta"><span>${fa(pct)}٪ از کتاب</span><span>${st.doneToday ? '✓ امروز انجام شد' : st.todaySec ? `امروز ${fa(Math.round(st.todaySec/60))} دقیقه` : 'امروز هنوز نه'}</span></div>
+    <div class="meta"><span>${tt(`${fa(pct)}% of book`,`${fa(pct)}٪ از کتاب`)}</span><span>${st.doneToday ? tt('✓ Done today','✓ امروز انجام شد') : st.todaySec ? tt(`${fa(Math.round(st.todaySec/60))} min today`,`امروز ${fa(Math.round(st.todaySec/60))} دقیقه`) : tt('Not yet today','امروز هنوز نه')}</span></div>
     <div class="week">${st.week.map(d=>`<span class="${d.done?'on':''} ${d.today?'today':''}">${d.label}</span>`).join('')}</div>
     <div class="btns">
-      <button class="primary" data-act="start" data-lang="${lang}">▶ ${st.doneToday ? 'یک جلسهٔ دیگر' : 'شروع جلسهٔ امروز'} – ${fa(t.minutes)} دقیقه</button>
-      <button class="ghost" data-act="track" data-lang="${lang}">کتاب و تنظیمات</button>
+      <button class="primary" data-act="start" data-lang="${lang}">▶ ${st.doneToday ? tt('One more session','یک جلسهٔ دیگر') : tt("Start today's session",'شروع جلسهٔ امروز')} – ${tt(`${fa(t.minutes)} min`,`${fa(t.minutes)} دقیقه`)}</button>
+      <button class="ghost" data-act="track" data-lang="${lang}">${tt('Book & settings','کتاب و تنظیمات')}</button>
     </div></section>`;
 }
 function installCard(){
   if(isStandalone()) return '';
-  if(isFramed) return `<section class="card note"><b>نصب روی گوشی</b><p>همین صفحه برای تمرین کار می‌کند. برای نصب به‌شکل اپ، کار آفلاین، ضبط صدا و دادن به دوستانی که Claude ندارند، نسخهٔ کامل را روی یک هاست رایگان (مثل Netlify یا GitHub Pages) بگذار و لینکش را بفرست. درس‌هایی را که اینجا آماده کرده‌ای با دکمهٔ 📤 کنار هر کتاب برایشان بفرست.</p></section>`;
-  return `<section class="card note"><b>نصب روی گوشی</b><p>${deferredPrompt ? 'با یک دکمه نصب کن:' : 'آیفون: در Safari دکمهٔ Share ← Add to Home Screen. اندروید: منوی Chrome ← Install app.'}</p>${deferredPrompt?'<button class="primary" data-act="install">نصب اپ</button>':''}</section>`;
+  const title=tt('Install on your phone','نصب روی گوشی');
+  if(isFramed) return `<section class="card note"><b>${title}</b><p>${tt('This page works for practice right here. To install it as an app, use it offline, check your speech and share it with friends who don\'t use Claude, open the full version: <b dir="ltr">amis883.github.io/Hopopo</b>. Send lessons you prepare here with the 📤 button next to each book.','همین صفحه برای تمرین کار می‌کند. برای نصب به‌شکل اپ، کار آفلاین، بررسی گفتار و دادن به دوستانی که Claude ندارند، نسخهٔ کامل را باز کن: <b dir="ltr">amis883.github.io/Hopopo</b>. درس‌هایی را که اینجا آماده کرده‌ای با دکمهٔ 📤 کنار هر کتاب برایشان بفرست.')}</p></section>`;
+  return `<section class="card note"><b>${title}</b><p>${deferredPrompt ? tt('Install with one tap:','با یک دکمه نصب کن:') : tt('iPhone: in Safari tap Share → Add to Home Screen. Android: Chrome menu ⋮ → Install app.','آیفون: در Safari دکمهٔ Share ← Add to Home Screen. اندروید: منوی Chrome ← Install app.')}</p>${deferredPrompt?`<button class="primary" data-act="install">${tt('Install app','نصب اپ')}</button>`:''}</section>`;
 }
 
 function profileHint(level){
   const p=PROFILES[level], n=p.phases.length;
   const echo=p.phases.filter(x=>x.t==='echo').length, sh=p.phases.filter(x=>x.t==='shadow').length, blind=p.phases.some(x=>x.blind);
-  return `جمله‌ها به تکه‌های حداکثر حدود ${fa(p.maxWords)} کلمه شکسته می‌شوند. اگر «بررسی صدا» روشن باشد، به‌جای تکرارِ ساده، هر تکه را می‌گویی و اپ درست/غلط هر کلمه را نشان می‌دهد. هر تکه ${fa(n)} مرحله دارد: یک بار گوش‌دادن${echo?`، ${fa(echo)} بار تکرار بعد از صدا`:''}، ${fa(sh)} بار شادوینگ همزمان${blind?' (آخری بدون متن)':''}. در پایان، کل متن آن روز یک بار پیوسته شادوینگ می‌شود و جلسهٔ بعد با مرور چند جملهٔ قبلی شروع می‌شود.`;
+  if(UI==='fa') return `جمله‌ها به تکه‌های حداکثر حدود ${fa(p.maxWords)} کلمه شکسته می‌شوند. اگر «بررسی صدا» روشن باشد، به‌جای تکرارِ ساده، هر تکه را می‌گویی و اپ درست/غلط هر کلمه را نشان می‌دهد. هر تکه ${fa(n)} مرحله دارد: یک بار گوش‌دادن${echo?`، ${fa(echo)} بار تکرار بعد از صدا`:''}، ${fa(sh)} بار شادوینگ همزمان${blind?' (آخری بدون متن)':''}. در پایان، کل متن آن روز یک بار پیوسته شادوینگ می‌شود و جلسهٔ بعد با مرور چند جملهٔ قبلی شروع می‌شود.`;
+  return `Sentences are split into chunks of about ${p.maxWords} words at most. Each chunk has ${n} steps: listen once${echo?`, repeat after the audio ${echo}×`:''}, shadow along ${sh}×${blind?' (the last one without text)':''}. With the speech check on, the repeat steps are replaced by saying the chunk and seeing each word marked right or wrong. Each session ends with one continuous shadowing pass of the day's text, and the next session starts by reviewing a few sentences from last time.`;
 }
 
 async function renderTrack(lang){
   view='track'; curLang=lang;
   const t=S.tracks[lang], L=LANGS[lang], meta=t.books[t.bookId];
   const book = meta ? await getBook(lang, t.bookId) : null;
-  const nextS = book ? (book.sentences[meta.pos] || '— کتاب تمام شد —') : '';
+  const nextS = book ? (book.sentences[meta.pos] || tt('— Book finished —','— کتاب تمام شد —')) : '';
   const books = Object.entries(t.books);
   app.innerHTML = `<div style="--acc:${L.color}">
-  <header class="top"><button class="icon" data-act="home" aria-label="بازگشت">→</button><h2>${L.fa} – ${L.name}</h2></header>
-  <section class="card"><h3>کتاب‌ها</h3>
+  <header class="top"><button class="icon" data-act="home" aria-label="Back">${tt('←','→')}</button><h2>${L.fa}${UI==='fa'||curLang==='de'?' – '+L.name:''}</h2></header>
+  <section class="card"><h3>${tt('Books','کتاب‌ها')}</h3>
     ${books.length ? books.map(([id,b])=>`<div class="bookitem ${id===t.bookId?'active':''}">
-      <button data-act="selbook" data-id="${id}"><bdi>${esc(b.title)}</bdi><small>${fa(b.pos)} از ${fa(b.total||0)} جمله</small></button>
-      <button class="icon" data-act="sharebook" data-id="${id}" aria-label="اشتراک">📤</button>
-      <button class="icon del" data-act="delbook" data-id="${id}" aria-label="حذف">🗑</button></div>`).join('') : '<p class="sub">کتابی نیست.</p>'}
-    <details class="import" ${books.length<=1?'open':''}><summary>➕ افزودن کتاب ${L.fa}</summary>
-      <label class="file">📷 عکس صفحه‌های کتاب<br><small>می‌توانی چند عکس را با هم انتخاب کنی (به ترتیب صفحه)</small><input type="file" id="imgs" accept="image/*" multiple></label>
-      <label class="file">📄 فایل کتاب<br><small>PDF (اسکن‌شده یا متنی)، EPUB، TXT یا بستهٔ شادوینگ (.json)</small><input type="file" id="file" accept=".pdf,.epub,.txt,.md,.json,text/plain,application/json,application/pdf,application/epub+zip"></label>
+      <button data-act="selbook" data-id="${id}"><bdi>${esc(b.title)}</bdi><small>${tt(`${fa(b.pos)} of ${fa(b.total||0)} sentences`,`${fa(b.pos)} از ${fa(b.total||0)} جمله`)}</small></button>
+      <button class="icon" data-act="sharebook" data-id="${id}" aria-label="Share">📤</button>
+      <button class="icon del" data-act="delbook" data-id="${id}" aria-label="Delete">🗑</button></div>`).join('') : `<p class="sub">${tt('No books yet.','کتابی نیست.')}</p>`}
+    <details class="import" ${books.length<=1?'open':''}><summary>➕ ${tt(`Add a ${L.fa} book or lesson`,`افزودن کتاب ${L.fa}`)}</summary>
+      <label class="file">📷 ${tt('Photos of book pages','عکس صفحه‌های کتاب')}<br><small>${tt('You can select several photos at once (in page order)','می‌توانی چند عکس را با هم انتخاب کنی (به ترتیب صفحه)')}</small><input type="file" id="imgs" accept="image/*" multiple></label>
+      <label class="file">📄 ${tt('Book file','فایل کتاب')}<br><small>${tt('PDF (scanned or text), EPUB, TXT or a shadowing pack (.json)','PDF (اسکن‌شده یا متنی)، EPUB، TXT یا بستهٔ شادوینگ (.json)')}</small><input type="file" id="file" accept=".pdf,.epub,.txt,.md,.json,text/plain,application/json,application/pdf,application/epub+zip"></label>
       <div id="pdfrange"></div>
-      ${meta && !meta.sample ? `<label class="check" style="margin:8px 0"><input type="checkbox" id="append"> اضافه شود به انتهای «<bdi>${esc(meta.title)}</bdi>»</label>` : ''}
-      <p class="hint">صفحه‌های یک درس را بده؛ اپ خودش گفت‌وگوها، متن‌های خواندنی و جمله‌های کاربردی روزمره را جدا می‌کند و تمرین‌ها، جدول‌ها و دستورالعمل‌ها را کنار می‌گذارد. قبل از افزودن می‌توانی انتخاب‌ها را ببینی و عوض کنی. برای عکس: نور خوب، صفحهٔ صاف، هر عکس یک صفحه.</p>
+      ${meta && !meta.sample ? `<label class="check" style="margin:8px 0"><input type="checkbox" id="append"> ${tt('Add to the end of','اضافه شود به انتهای')} «<bdi>${esc(meta.title)}</bdi>»</label>` : ''}
+      <p class="hint">${tt('Give it the pages of one lesson: the app keeps dialogues, reading texts and useful everyday phrases, and drops exercises, tables and instructions. You can review the picks before adding. For photos: good light, flat page, one page per photo.','صفحه‌های یک درس را بده؛ اپ خودش گفت‌وگوها، متن‌های خواندنی و جمله‌های کاربردی روزمره را جدا می‌کند و تمرین‌ها، جدول‌ها و دستورالعمل‌ها را کنار می‌گذارد. قبل از افزودن می‌توانی انتخاب‌ها را ببینی و عوض کنی. برای عکس: نور خوب، صفحهٔ صاف، هر عکس یک صفحه.')}</p>
       <div id="picks"></div>
-      <div class="or">یا متن را اینجا بچسبان</div>
-      <input type="text" id="btitle" placeholder="نام کتاب یا درس">
+      <div class="or">${tt('or paste text here','یا متن را اینجا بچسبان')}</div>
+      <input type="text" id="btitle" placeholder="${tt('Book or lesson name','نام کتاب یا درس')}">
       <textarea id="btext" dir="ltr" rows="7" placeholder="Paste your ${L.name} text here…"></textarea>
-      <div class="btnrow"><button class="primary small" data-act="smarttext">✨ انتخاب متن‌های مفید</button><button class="ghost small" data-act="addtext">افزودن همهٔ متن</button></div>
+      <div class="btnrow"><button class="primary small" data-act="smarttext">✨ ${tt('Pick useful texts','انتخاب متن‌های مفید')}</button><button class="ghost small" data-act="addtext">${tt('Add all text','افزودن همهٔ متن')}</button></div>
       <div id="impmsg" class="msg"></div>
-      <button class="ghost small hidden" id="ocrstop" data-act="ocrcancel">توقف تشخیص متن</button>
+      <button class="ghost small hidden" id="ocrstop" data-act="ocrcancel">${tt('Stop text recognition','توقف تشخیص متن')}</button>
     </details>
   </section>
-  ${meta ? `<section class="card"><h3>جلسهٔ بعد از اینجا شروع می‌شود</h3>
+  ${meta ? `<section class="card"><h3>${tt('Next session starts here','جلسهٔ بعد از اینجا شروع می‌شود')}</h3>
     <p class="preview" dir="ltr">${esc(nextS)}</p>
-    <div class="row"><input type="search" id="q" dir="auto" placeholder="جستجو در کتاب (مثلاً Lektion 2)"><button class="ghost small" data-act="search">جستجو</button></div>
+    <div class="row"><input type="search" id="q" dir="auto" placeholder="${tt('Search the book (e.g. Lektion 2)','جستجو در کتاب (مثلاً Lektion 2)')}"><button class="ghost small" data-act="search">${tt('Search','جستجو')}</button></div>
     <div id="results" class="results"></div>
-    <div class="row" style="margin-top:8px"><label>جملهٔ شمارهٔ</label><input type="number" id="posnum" min="1" max="${meta.total||1}" value="${meta.pos+1}"><button class="ghost small" data-act="setpos">برو</button><button class="ghost small" data-act="restart">از اول</button></div>
+    <div class="row" style="margin-top:8px"><label>${tt('Sentence #','جملهٔ شمارهٔ')}</label><input type="number" id="posnum" min="1" max="${meta.total||1}" value="${meta.pos+1}"><button class="ghost small" data-act="setpos">${tt('Go','برو')}</button><button class="ghost small" data-act="restart">${tt('Restart','از اول')}</button></div>
   </section>`:''}
-  <section class="card"><h3>تنظیمات ${L.fa}</h3>
-    <div class="field"><span>سطح من</span><select id="level">${Object.keys(PROFILES).map(k=>`<option ${k===t.level?'selected':''}>${k}</option>`).join('')}</select></div>
-    <div class="field"><span>مدت هر جلسه <output id="minout">${fa(t.minutes)} دقیقه</output></span><input type="range" id="minutes" min="10" max="20" step="1" value="${t.minutes}"></div>
-    <div class="field"><span>سرعت صدا <output id="spout">×${fa(t.speed)}</output></span><input type="range" id="speed" min="0.7" max="1.3" step="0.05" value="${t.speed}"></div>
-    <div class="field"><span>صدای ${L.fa}</span><div class="row"><select id="voice" style="margin:0"></select><button class="ghost small" data-act="testvoice">تست</button></div><div id="vwarn" class="msg warn"></div></div>
-    <label class="check"><input type="checkbox" id="check" ${t.check?'checked':''}> 🎙 بعد از هر جمله صدایم را بشنود و درست/غلط را نشان بدهد</label>
-    <div class="field" style="margin-top:6px"><span>تعداد دفعه‌های گفتن و بررسی هر جمله</span><select id="checkReps">${[1,2,3].map(n=>`<option value="${n}" ${n===(t.checkReps||2)?'selected':''}>${fa(n)} بار</option>`).join('')}</select>
-      <div class="msg">${!SR ? 'این مرورگر تشخیص گفتار ندارد (Chrome اندروید یا Safari آیفون لازم است).' : isFramed ? 'بررسی گفتار فقط در نسخهٔ نصب‌شده کار می‌کند؛ اینجا به‌جایش فرصت تکرار داری.' : 'بار اول اجازهٔ میکروفون می‌خواهد.'}</div></div>
-    <label class="check"><input type="checkbox" id="warmup" ${t.warmup?'checked':''}> شروع هر جلسه با مرور جمله‌های جلسهٔ قبل</label>
+  <section class="card"><h3>${tt(`${L.fa} settings`,`تنظیمات ${L.fa}`)}</h3>
+    <div class="field"><span>${tt('My level','سطح من')}</span><select id="level">${Object.keys(PROFILES).map(k=>`<option ${k===t.level?'selected':''}>${k}</option>`).join('')}</select></div>
+    <div class="field"><span>${tt('Session length','مدت هر جلسه')} <output id="minout">${tt(`${fa(t.minutes)} min`,`${fa(t.minutes)} دقیقه`)}</output></span><input type="range" id="minutes" min="10" max="20" step="1" value="${t.minutes}"></div>
+    <div class="field"><span>${tt('Voice speed','سرعت صدا')} <output id="spout">×${fa(t.speed)}</output></span><input type="range" id="speed" min="0.7" max="1.3" step="0.05" value="${t.speed}"></div>
+    <div class="field"><span>${tt(`${L.fa} voice`,`صدای ${L.fa}`)}</span><div class="row"><select id="voice" style="margin:0"></select><button class="ghost small" data-act="testvoice">${tt('Test','تست')}</button></div><div id="vwarn" class="msg warn"></div></div>
+    <label class="check"><input type="checkbox" id="check" ${t.check?'checked':''}> 🎙 ${tt('Listen to me after each sentence and mark right/wrong','بعد از هر جمله صدایم را بشنود و درست/غلط را نشان بدهد')}</label>
+    <div class="field" style="margin-top:6px"><span>${tt('Times to say and check each sentence','تعداد دفعه‌های گفتن و بررسی هر جمله')}</span><select id="checkReps">${[1,2,3].map(n=>`<option value="${n}" ${n===(t.checkReps||2)?'selected':''}>${tt(`${fa(n)}×`,`${fa(n)} بار`)}</option>`).join('')}</select>
+      <div class="msg">${!SR ? tt('This browser has no speech recognition (use Chrome on Android or Safari on iPhone).','این مرورگر تشخیص گفتار ندارد (Chrome اندروید یا Safari آیفون لازم است).') : isFramed ? tt('The speech check only works in the installed version; here you get a pause to repeat instead.','بررسی گفتار فقط در نسخهٔ نصب‌شده کار می‌کند؛ اینجا به‌جایش فرصت تکرار داری.') : tt('Asks for microphone permission the first time.','بار اول اجازهٔ میکروفون می‌خواهد.')}</div></div>
+    <label class="check"><input type="checkbox" id="warmup" ${t.warmup?'checked':''}> ${tt('Start each session by reviewing the last session','شروع هر جلسه با مرور جمله‌های جلسهٔ قبل')}</label>
     <p class="hint" id="lhint">${profileHint(t.level)}</p>
   </section></div>`;
   refreshVoiceSelect();
@@ -801,8 +815,8 @@ async function renderTrack(lang){
 function refreshVoiceSelect(){
   const sel=$('#voice'); if(!sel || !curLang) return;
   const t=S.tracks[curLang], vs=voicesFor(curLang), cur=voiceFor(t);
-  sel.innerHTML = vs.length ? vs.map(v=>`<option value="${esc(v.voiceURI)}" ${cur&&v.voiceURI===cur.voiceURI?'selected':''}>${esc(v.name)} (${esc(v.lang)})</option>`).join('') : '<option>صدای پیش‌فرض</option>';
-  $('#vwarn').textContent = vs.length ? '' : `روی این دستگاه صدای ${LANGS[curLang].fa} پیدا نشد. از تنظیمات گوشی (Accessibility ← Spoken Content ← Voices یا Text-to-speech) صدای ${LANGS[curLang].name} را دانلود کن.`;
+  sel.innerHTML = vs.length ? vs.map(v=>`<option value="${esc(v.voiceURI)}" ${cur&&v.voiceURI===cur.voiceURI?'selected':''}>${esc(v.name)} (${esc(v.lang)})</option>`).join('') : `<option>${tt('Default voice','صدای پیش‌فرض')}</option>`;
+  $('#vwarn').textContent = vs.length ? '' : UI!=='fa' ? `No ${LANGS[curLang].fa} voice found on this device. Download one in your phone settings (iPhone: Accessibility → Spoken Content → Voices; Android: Text-to-speech → Install voice data).` : `روی این دستگاه صدای ${LANGS[curLang].fa} پیدا نشد. از تنظیمات گوشی (Accessibility ← Spoken Content ← Voices یا Text-to-speech) صدای ${LANGS[curLang].name} را دانلود کن.`;
 }
 
 /* ---------- session ---------- */
@@ -810,11 +824,11 @@ let R=null;
 async function startSession(lang){
   unlockAudio();
   const t=S.tracks[lang], meta=t.books[t.bookId];
-  if(!meta){ toast('اول یک کتاب اضافه یا انتخاب کن'); renderTrack(lang); return; }
+  if(!meta){ toast(tt('Add or choose a book first','اول یک کتاب اضافه یا انتخاب کن')); renderTrack(lang); return; }
   const book = await getBook(lang, t.bookId);
-  if(!book){ toast('متن این کتاب در این مرورگر پیدا نشد؛ دوباره واردش کن.'); renderTrack(lang); return; }
+  if(!book){ toast(tt('This book\'s text isn\'t in this browser; import it again.','متن این کتاب در این مرورگر پیدا نشد؛ دوباره واردش کن.')); renderTrack(lang); return; }
   const plan = buildPlan(t, meta, book.sentences);
-  if(plan.newCount===0){ toast('این کتاب تمام شد! 🎉 کتاب جدید اضافه کن یا از اول شروع کن.', 5000); renderTrack(lang); return; }
+  if(plan.newCount===0){ toast(tt('You finished this book! 🎉 Add a new one or restart it.','این کتاب تمام شد! 🎉 کتاب جدید اضافه کن یا از اول شروع کن.'), 5000); renderTrack(lang); return; }
   R = {lang, bookId:t.bookId, plan, i:0, token:0, playing:false, elapsed:0, showText:true};
   renderSession(); wakeLock(true); runFrom(0);
 }
@@ -822,24 +836,24 @@ function renderSession(){
   view='session';
   const t=S.tracks[R.lang], L=LANGS[R.lang];
   app.innerHTML = `<div class="session" style="--acc:${L.color}">
-    <header class="stop"><button class="icon" data-act="quit" aria-label="خروج">✕</button><div class="stitle">${L.fa} – ${t.level}</div><div class="timer" id="timer" dir="ltr"></div></header>
+    <header class="stop"><button class="icon" data-act="quit" aria-label="Exit">✕</button><div class="stitle">${L.fa} – ${t.level}</div><div class="timer" id="timer" dir="ltr"></div></header>
     <div class="sbar"><i id="sprog"></i></div>
     <div class="phase" id="phase"></div>
     <div class="counter" id="counter"></div>
     <div class="textcard ${/A/.test(t.level)?'lvl-a':''}" id="textcard" dir="ltr" lang="${L.code}"></div>
     <div class="heard" id="heard"></div>
-    <div class="gap" id="gap"><div class="gapbar"><i id="gapfill"></i></div><span id="gaptext">نوبت توئه — بلند تکرار کن</span></div>
+    <div class="gap" id="gap"><div class="gapbar"><i id="gapfill"></i></div><span id="gaptext">${tt('Your turn — repeat it aloud','نوبت توئه — بلند تکرار کن')}</span></div>
     <div class="controls" dir="ltr">
-      <button class="icon big" data-act="prev" aria-label="قبلی">⏮</button>
-      <button class="icon big" data-act="replay" aria-label="دوباره">⟲</button>
-      <button class="play" data-act="toggle" id="playbtn" aria-label="پخش/توقف">⏸</button>
-      <button class="icon big" data-act="next" aria-label="بعدی">⏭</button>
+      <button class="icon big" data-act="prev" aria-label="Previous">⏮</button>
+      <button class="icon big" data-act="replay" aria-label="Replay">⟲</button>
+      <button class="play" data-act="toggle" id="playbtn" aria-label="Play/Pause">⏸</button>
+      <button class="icon big" data-act="next" aria-label="Next">⏭</button>
     </div>
     <div class="tools">
-      <button class="chip" data-act="toggletext" id="ttext">👁 نمایش متن</button>
-      <a class="chip" id="trlink" target="_blank" rel="noopener">ترجمهٔ جمله ↗</a>
-      <button class="chip" data-act="rec" id="recbtn">🎙 ضبط صدای من</button>
-      <button class="chip hidden" data-act="playrec" id="playrec">▶ صدای من</button>
+      <button class="chip" data-act="toggletext" id="ttext"></button>
+      <a class="chip" id="trlink" target="_blank" rel="noopener">${tt('Translate sentence','ترجمهٔ جمله')} ↗</a>
+      <button class="chip" data-act="rec" id="recbtn">🎙 ${tt('Record myself','ضبط صدای من')}</button>
+      <button class="chip hidden" data-act="playrec" id="playrec">▶ ${tt('My recording','صدای من')}</button>
     </div>
     <div class="lookup hidden" id="lookup"></div>
   </div>`;
@@ -849,15 +863,15 @@ function curStep(){ return R.plan.steps[Math.min(R.i, R.plan.steps.length-1)]; }
 function updSession(){
   if(view!=='session') return;
   const st=curStep(), c=R.plan.chunks[st.k], key = st.sec==='main' ? (st.ph.blind?'blind':st.ph.t) : st.sec;
-  const [title,desc]=PHASE_TXT[key];
-  $('#phase').innerHTML = `<b>${title}${st.ph.t==='check' ? ` (تلاش ${fa(st.ph.n)} از ${fa(st.ph.of)})` : ''}</b><small>${desc}</small>`;
+  const [title,desc]=(UI==='fa'?PHASE_FA:PHASE_EN)[key];
+  $('#phase').innerHTML = `<b>${title}${st.ph.t==='check' ? tt(` (try ${fa(st.ph.n)} of ${fa(st.ph.of)})`,` (تلاش ${fa(st.ph.n)} از ${fa(st.ph.of)})`) : ''}</b><small>${desc}</small>`;
   const main = R.plan.chunks.length - R.plan.newCount;
-  $('#counter').textContent = st.sec==='review' ? 'مرور' : `${st.sec==='final'?'دور پیوسته – ':''}تکهٔ ${fa(st.k-main+1)} از ${fa(R.plan.newCount)}`;
+  $('#counter').textContent = st.sec==='review' ? tt('Review','مرور') : `${st.sec==='final'?tt('Continuous pass – ','دور پیوسته – '):''}${tt(`Chunk ${fa(st.k-main+1)} of ${fa(R.plan.newCount)}`,`تکهٔ ${fa(st.k-main+1)} از ${fa(R.plan.newCount)}`)}`;
   const tc=$('#textcard');
   if(tc.dataset.k!==String(st.k)){ tc.dataset.k=st.k; tc.innerHTML='<p class="tx">'+wordsHtml(c.text)+'</p>'; tc.classList.remove('peek'); }
   tc.classList.toggle('blind', !R.showText || !!st.ph.blind);
-  $('#ttext').textContent = R.showText ? '🙈 پنهان کردن متن' : '👁 نمایش متن';
-  $('#trlink').href = `https://translate.google.com/?sl=${R.lang}&tl=fa&text=${encodeURIComponent(c.text)}&op=translate`;
+  $('#ttext').textContent = R.showText ? tt('🙈 Hide text','🙈 پنهان کردن متن') : tt('👁 Show text','👁 نمایش متن');
+  $('#trlink').href = `https://translate.google.com/?sl=${R.lang}&tl=${UI==='fa'?'fa':(R.lang==='en'?'de':'en')}&text=${encodeURIComponent(c.text)}&op=translate`;
   $('#playbtn').textContent = R.playing ? '⏸' : '▶';
   $('#sprog').style.width = (100*R.i/R.plan.steps.length)+'%';
   updTimer();
@@ -890,13 +904,13 @@ async function runFrom(i){
     if(tok!==R.token) return;
     if(st.ph.t==='check'){
       const dur=estDur(c.text, st.ph.r, R.lang), g=$('#gap'), gt=$('#gaptext'), hd=$('#heard');
-      gt.textContent='🎙 حالا بگو… گوش می‌دهم'; gt.classList.add('listening'); $('#gapfill').style.width='100%'; g.classList.add('on');
+      gt.textContent=tt('🎙 Now say it… I\'m listening','🎙 حالا بگو… گوش می‌دهم'); gt.classList.add('listening'); $('#gapfill').style.width='100%'; g.classList.add('on');
       hd.innerHTML='';
-      const heard = await listenOnce(R.lang, (dur*1.8+4)*1000, tok, t=>{ hd.innerHTML=`<span class="lbl">شنیدم: </span><span class="txt">${esc(t)}</span>`; });
-      g.classList.remove('on'); gt.classList.remove('listening'); gt.textContent='نوبت توئه — بلند تکرار کن';
+      const heard = await listenOnce(R.lang, (dur*1.8+4)*1000, tok, t=>{ hd.innerHTML=`<span class="lbl">${tt('I heard: ','شنیدم: ')}</span><span class="txt">${esc(t)}</span>`; });
+      g.classList.remove('on'); gt.classList.remove('listening'); gt.textContent=tt('Your turn — repeat it aloud','نوبت توئه — بلند تکرار کن');
       if(tok!==R.token) return;
       if(heard===null){
-        if(!R.srWarned){ R.srWarned=true; toast(srBlocked ? 'اجازهٔ میکروفون داده نشد؛ بدون بررسی ادامه می‌دهیم.' : (isFramed ? 'بررسی گفتار فقط در نسخهٔ نصب‌شدهٔ اپ کار می‌کند؛ اینجا فقط فرصت تکرار داری.' : 'این مرورگر تشخیص گفتار ندارد؛ Chrome یا Safari را امتحان کن.'), 5500); }
+        if(!R.srWarned){ R.srWarned=true; toast(srBlocked ? tt('Microphone permission was denied; continuing without checking.','اجازهٔ میکروفون داده نشد؛ بدون بررسی ادامه می‌دهیم.') : (isFramed ? tt('The speech check only works in the installed app; here you just get a pause to repeat.','بررسی گفتار فقط در نسخهٔ نصب‌شدهٔ اپ کار می‌کند؛ اینجا فقط فرصت تکرار داری.') : tt('This browser has no speech recognition; try Chrome or Safari.','این مرورگر تشخیص گفتار ندارد؛ Chrome یا Safari را امتحان کن.')), 5500); }
         g.classList.add('on');
         await wait((dur*1.25+1)*1000, tok, p=>{ const f=$('#gapfill'); if(f) f.style.width=(100-100*p)+'%'; });
         g.classList.remove('on'); if(tok!==R.token) return;
@@ -904,8 +918,8 @@ async function runFrom(i){
         const res = heard ? scoreSpeech(c.text, heard, R.lang) : {marks:c.text.split(/\s+/).filter(Boolean).map(()=>'bad'), score:0};
         showMarks(res.marks);
         const col = res.score>=85 ? 'var(--ok)' : res.score>=60 ? 'var(--de)' : 'var(--danger)';
-        hd.innerHTML = heard ? `<span class="lbl">شنیدم: </span><span class="txt">${esc(heard)}</span><span class="score" style="background:${col}">${fa(res.score)}٪</span>`
-                             : `<span class="lbl">صدایی نشنیدم — بلندتر و نزدیک‌تر به گوشی بگو.</span>`;
+        hd.innerHTML = heard ? `<span class="lbl">${tt('I heard: ','شنیدم: ')}</span><span class="txt">${esc(heard)}</span><span class="score" style="background:${col}">${fa(res.score)}${tt('%','٪')}</span>`
+                             : `<span class="lbl">${tt('I didn\'t hear anything — speak louder and closer to the phone.','صدایی نشنیدم — بلندتر و نزدیک‌تر به گوشی بگو.')}</span>`;
         (R.scores = R.scores || []).push({k:st.k, n:st.ph.n, score:res.score});
         await wait(res.score>=85 ? 1600 : 2800, tok);
         if(tok!==R.token) return;
@@ -954,17 +968,17 @@ function renderDone(){
   view='done';
   const t=S.tracks[R.lang], L=LANGS[R.lang], st=stats(t);
   app.innerHTML = `<div class="done" style="--acc:${L.color}">
-    <div class="big">✓</div><h2>آفرین! جلسهٔ ${L.fa} تمام شد</h2><p class="sub">ادامهٔ کتاب برای فردا آماده است.</p>
-    <div class="stats"><div><b>${fa(Math.max(1,Math.round(R.elapsed/60)))}</b><small>دقیقه</small></div><div><b>${fa(R.plan.newCount)}</b><small>تکهٔ جدید</small></div><div><b>🔥 ${fa(st.streak)}</b><small>روز پشت‌سرهم</small></div></div>
+    <div class="big">✓</div><h2>${tt(`Well done! ${L.fa} session complete`,`آفرین! جلسهٔ ${L.fa} تمام شد`)}</h2><p class="sub">${tt('The rest of the book is ready for tomorrow.','ادامهٔ کتاب برای فردا آماده است.')}</p>
+    <div class="stats"><div><b>${fa(Math.max(1,Math.round(R.elapsed/60)))}</b><small>${tt('minutes','دقیقه')}</small></div><div><b>${fa(R.plan.newCount)}</b><small>${tt('new chunks','تکهٔ جدید')}</small></div><div><b>🔥 ${fa(st.streak)}</b><small>${tt('day streak','روز پشت‌سرهم')}</small></div></div>
     ${accuracyHtml()}
-    <div class="btns"><button class="primary" data-act="again">⟲ یک دور دیگر شادوینگ پیوسته</button><button class="ghost" data-act="home">بازگشت به خانه</button></div></div>`;
+    <div class="btns"><button class="primary" data-act="again">⟲ ${tt('One more continuous shadowing pass','یک دور دیگر شادوینگ پیوسته')}</button><button class="ghost" data-act="home">${tt('Back to home','بازگشت به خانه')}</button></div></div>`;
 }
 function accuracyHtml(){
   const sc=R.scores||[]; if(!sc.length) return '';
   const avg=Math.round(sc.reduce((a,x)=>a+x.score,0)/sc.length);
   const last={}; sc.forEach(x=>{ last[x.k]=x.score; });
   const hard=Object.entries(last).filter(([,v])=>v<70).sort((a,b)=>a[1]-b[1]).slice(0,3).map(([k])=>R.plan.chunks[+k].text);
-  return `<div class="card" style="text-align:right"><b>دقت گفتار: ${fa(avg)}٪</b>${hard.length?`<p class="sub" style="margin:6px 0">جمله‌هایی که بیشتر تمرین بخواهند:</p>${hard.map(h=>`<p class="preview" dir="ltr">${esc(h)}</p>`).join('')}`:'<p class="sub">عالی بود؛ همهٔ جمله‌ها خوب گفته شدند.</p>'}</div>`;
+  return `<div class="card" style="text-align:start"><b>${tt(`Speech accuracy: ${fa(avg)}%`,`دقت گفتار: ${fa(avg)}٪`)}</b>${hard.length?`<p class="sub" style="margin:6px 0">${tt('Sentences that need more practice:','جمله‌هایی که بیشتر تمرین بخواهند:')}</p>${hard.map(h=>`<p class="preview" dir="ltr">${esc(h)}</p>`).join('')}`:`<p class="sub">${tt('Great — every sentence was said well.','عالی بود؛ همهٔ جمله‌ها خوب گفته شدند.')}</p>`}</div>`;
 }
 function againFinal(){
   const steps = R.plan.steps.filter(s=>s.sec==='final');
@@ -975,8 +989,8 @@ function againFinal(){
 function askQuit(){
   pause();
   const o=document.createElement('div'); o.className='overlay'; o.id='quitov';
-  o.innerHTML=`<div class="sheet"><b>جلسه را تمام می‌کنی؟</b><p>پیشرفتت تا همین جمله ذخیره می‌شود و دفعهٔ بعد از همین‌جا ادامه می‌دهی.</p>
-    <div class="btns"><button class="ghost" data-act="resume">ادامه بده</button><button class="primary" style="--acc:var(--danger)" data-act="exit">خروج</button></div></div>`;
+  o.innerHTML=`<div class="sheet"><b>${tt('End the session?','جلسه را تمام می‌کنی؟')}</b><p>${tt('Your progress up to this sentence is saved and you\'ll continue from here next time.','پیشرفتت تا همین جمله ذخیره می‌شود و دفعهٔ بعد از همین‌جا ادامه می‌دهی.')}</p>
+    <div class="btns"><button class="ghost" data-act="resume">${tt('Keep going','ادامه بده')}</button><button class="primary" style="--acc:var(--danger)" data-act="exit">${tt('Exit','خروج')}</button></div></div>`;
   document.body.appendChild(o);
 }
 let wl=null;
@@ -995,24 +1009,24 @@ async function toggleRec(){
     const parts=[]; rec=new MediaRecorder(stream);
     rec.ondataavailable=e=>{ if(e.data.size) parts.push(e.data); };
     rec.onstop=()=>{ stream.getTracks().forEach(t=>t.stop()); if(recURL) URL.revokeObjectURL(recURL); recURL=URL.createObjectURL(new Blob(parts,{type:rec.mimeType||'audio/webm'}));
-      const b=$('#recbtn'); if(b){ b.classList.remove('rec'); b.textContent='🎙 ضبط دوباره'; } const p=$('#playrec'); if(p) p.classList.remove('hidden'); };
-    rec.start(); btn.classList.add('rec'); btn.textContent='⏹ پایان ضبط';
+      const b=$('#recbtn'); if(b){ b.classList.remove('rec'); b.textContent=tt('🎙 Record again','🎙 ضبط دوباره'); } const p=$('#playrec'); if(p) p.classList.remove('hidden'); };
+    rec.start(); btn.classList.add('rec'); btn.textContent=tt('⏹ Stop recording','⏹ پایان ضبط');
     if(!R.playing) runFrom(chunkStart(R.i));
-  }catch(e){ toast('میکروفون اینجا در دسترس نیست. نسخهٔ نصب‌شدهٔ اپ را باز کن و اجازهٔ میکروفون بده.', 4500); }
+  }catch(e){ toast(tt('The microphone isn\'t available here. Open the installed app and allow the microphone.','میکروفون اینجا در دسترس نیست. نسخهٔ نصب‌شدهٔ اپ را باز کن و اجازهٔ میکروفون بده.'), 4500); }
 }
-function playRec(){ if(!recURL) return; pause(); if(recAudio) recAudio.pause(); recAudio=new Audio(recURL); recAudio.play().catch(()=>toast('پخش ممکن نشد')); }
+function playRec(){ if(!recURL) return; pause(); if(recAudio) recAudio.pause(); recAudio=new Audio(recURL); recAudio.play().catch(()=>toast(tt('Could not play','پخش ممکن نشد'))); }
 
 /* ---------- word lookup ---------- */
 function showLookup(word){
   const w=word.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu,''); if(!w) return;
   pause();
   const e=encodeURIComponent(w), lang=R.lang;
-  const links=[['ترجمه به فارسی', `https://translate.google.com/?sl=${lang}&tl=fa&text=${e}&op=translate`]];
+  const links=[[tt('Translate','ترجمه به فارسی'), `https://translate.google.com/?sl=${lang}&tl=${UI==='fa'?'fa':(lang==='en'?'de':'en')}&text=${e}&op=translate`]];
   if(lang==='en') links.push(['Cambridge', `https://dictionary.cambridge.org/dictionary/english/${e}`]);
   else links.push(['dict.cc', `https://www.dict.cc/?s=${e}`], ['LEO', `https://dict.leo.org/german-english/${e}`]);
   const box=$('#lookup');
   box.innerHTML=`<div class="trow"><div class="word">${esc(w)}</div><button class="icon" data-act="closelookup">✕</button></div>
-    <div class="links">${links.map(([n,u])=>`<a class="chip" href="${u}" target="_blank" rel="noopener">${n} ↗</a>`).join('')}<button class="chip" data-act="sayword" data-w="${esc(w)}">🔊 تلفظ</button></div>`;
+    <div class="links">${links.map(([n,u])=>`<a class="chip" href="${u}" target="_blank" rel="noopener">${n} ↗</a>`).join('')}<button class="chip" data-act="sayword" data-w="${esc(w)}">🔊 ${tt('Say it','تلفظ')}</button></div>`;
   box.classList.remove('hidden');
 }
 
@@ -1026,41 +1040,42 @@ document.addEventListener('click', async ev=>{
   const act=el.dataset.act, lang=el.dataset.lang || curLang;
   switch(act){
     case 'home': stopAudio(); renderHome(); break;
+    case 'uilang': UI = UI==='fa' ? 'en' : 'fa'; S.ui=UI; save(); applyUI(); renderHome(); break;
     case 'start': startSession(lang); break;
     case 'track': renderTrack(lang); break;
     case 'install': if(deferredPrompt){ deferredPrompt.prompt(); deferredPrompt=null; } break;
     case 'selbook': S.tracks[curLang].bookId=el.dataset.id; save(); renderTrack(curLang); break;
     case 'delbook': {
-      if(!el.classList.contains('confirm')){ el.classList.add('confirm'); el.textContent='حذف؟'; setTimeout(()=>{ if(el.isConnected){ el.classList.remove('confirm'); el.textContent='🗑'; } },3000); break; }
+      if(!el.classList.contains('confirm')){ el.classList.add('confirm'); el.textContent=tt('Delete?','حذف؟'); setTimeout(()=>{ if(el.isConnected){ el.classList.remove('confirm'); el.textContent='🗑'; } },3000); break; }
       const t=S.tracks[curLang], id=el.dataset.id; delete t.books[id]; bookCache.delete(id); if(!id.startsWith('sample-')) DB.del('book:'+id);
       if(t.bookId===id) t.bookId=Object.keys(t.books)[0]||null; save(); renderTrack(curLang); break; }
     case 'addtext': {
-      const raw=$('#btext').value.trim(), title=$('#btitle').value.trim()||('متن '+new Date().toLocaleDateString('fa-IR')), msg=$('#impmsg');
-      if(!raw){ msg.textContent='اول متن را بچسبان.'; break; }
+      const raw=$('#btext').value.trim(), title=$('#btitle').value.trim()||(tt('Text ','متن ')+new Date().toLocaleDateString(loc())), msg=$('#impmsg');
+      if(!raw){ msg.textContent=tt('Paste some text first.','اول متن را بچسبان.'); break; }
       { const pk=parsePack(raw); if(pk){ try{ await importPack(pk); }catch(e){ msg.textContent=e.message; msg.className='msg err'; } break; } }
-      try{ const ap=$('#append'); const n=await importBook(curLang, title, raw, ap&&ap.checked ? S.tracks[curLang].bookId : null); toast(`✓ ${fa(n)} جمله اضافه شد`); renderTrack(curLang); }catch(e){ msg.textContent=e.message; msg.className='msg err'; }
+      try{ const ap=$('#append'); const n=await importBook(curLang, title, raw, ap&&ap.checked ? S.tracks[curLang].bookId : null); toast(tt(`✓ ${fa(n)} sentences added`,`✓ ${fa(n)} جمله اضافه شد`)); renderTrack(curLang); }catch(e){ msg.textContent=e.message; msg.className='msg err'; }
       break; }
     case 'search': doSearch(); break;
     case 'sharebook': shareBook(el.dataset.id); break;
     case 'smarttext': {
       const raw=$('#btext').value.trim(); { const pk=parsePack(raw); if(pk){ try{ await importPack(pk); }catch(e){ say(e.message,true); } break; } }
-      if(!raw){ say('اول متن را بچسبان یا فایل/عکس انتخاب کن.', true); break; }
-      pickFromText(raw, $('#btitle').value.trim()||'درس'); break; }
+      if(!raw){ say(tt('Paste text or choose a file/photo first.','اول متن را بچسبان یا فایل/عکس انتخاب کن.'), true); break; }
+      pickFromText(raw, $('#btitle').value.trim()||tt('Lesson','درس')); break; }
     case 'addpicks': {
-      const txt=pickedText(); if(!txt){ toast('هیچ متنی انتخاب نشده'); break; }
-      const title=$('#btitle').value.trim() || PICKS.lesson || PICKS.title || 'درس';
-      try{ const ap=$('#append'); const n=await importBook(curLang, title, txt, ap&&ap.checked ? S.tracks[curLang].bookId : null); toast(`✓ ${fa(n)} جمله برای شادوینگ اضافه شد`, 4000); renderTrack(curLang); }
+      const txt=pickedText(); if(!txt){ toast(tt('Nothing selected','هیچ متنی انتخاب نشده')); break; }
+      const title=$('#btitle').value.trim() || PICKS.lesson || PICKS.title || tt('Lesson','درس');
+      try{ const ap=$('#append'); const n=await importBook(curLang, title, txt, ap&&ap.checked ? S.tracks[curLang].bookId : null); toast(tt(`✓ ${fa(n)} sentences added for shadowing`,`✓ ${fa(n)} جمله برای شادوینگ اضافه شد`), 4000); renderTrack(curLang); }
       catch(e){ say(e.message, true); }
       break; }
-    case 'editpicks': $('#btext').value=pickedText(); $('#picks').innerHTML=''; say('متن انتخاب‌شده در کادر است؛ ویرایش کن و «افزودن همهٔ متن» را بزن.'); $('#btext').scrollIntoView({behavior:'smooth',block:'center'}); break;
+    case 'editpicks': $('#btext').value=pickedText(); $('#picks').innerHTML=''; say(tt('The selected text is in the box; edit it and tap "Add all text".','متن انتخاب‌شده در کادر است؛ ویرایش کن و «افزودن همهٔ متن» را بزن.')); $('#btext').scrollIntoView({behavior:'smooth',block:'center'}); break;
     case 'rawtext': $('#btext').value=PICKS.raw||''; $('#btext').scrollIntoView({behavior:'smooth',block:'center'}); break;
-    case 'ocrcancel': ocrCancel=true; el.textContent='در حال توقف…'; break;
+    case 'ocrcancel': ocrCancel=true; el.textContent=tt('Stopping…','در حال توقف…'); break;
     case 'pdfocr': {
       const a=Math.max(1, +$('#pfrom').value||1), b=Math.min(pendingPdf.pdf.numPages, +$('#pto').value||a), pdf=pendingPdf.pdf, name=pendingPdf.name;
       $('#pdfrange').innerHTML='';
       const pages=[]; for(let i=a;i<=b;i++) pages.push(i);
-      try{ await processPages(pages.map(i=>async()=>pdfPageCanvas(await pdf.getPage(i))), k=>`صفحهٔ ${fa(pages[k])}`, name); }
-      catch(e){ const m=$('#impmsg'); m.className='msg err'; m.textContent='تشخیص متن ناموفق بود: '+(e.message||e); }
+      try{ await processPages(pages.map(i=>async()=>pdfPageCanvas(await pdf.getPage(i))), k=>tt(`page ${fa(pages[k])}`,`صفحهٔ ${fa(pages[k])}`), name); }
+      catch(e){ const m=$('#impmsg'); m.className='msg err'; m.textContent=tt('Text recognition failed: ','تشخیص متن ناموفق بود: ')+(e.message||e); }
       break; }
     case 'jump': setPos(+el.dataset.s); break;
     case 'setpos': setPos((+$('#posnum').value||1)-1); break;
@@ -1085,15 +1100,15 @@ async function doSearch(){
   const q=($('#q').value||'').trim().toLowerCase(), box=$('#results'); if(!q){ box.innerHTML=''; return; }
   const t=S.tracks[curLang], book=await getBook(curLang, t.bookId); if(!book) return;
   const hits=[]; book.sentences.forEach((s,i)=>{ if(hits.length<15 && s.toLowerCase().includes(q)) hits.push(i); });
-  box.innerHTML = hits.length ? hits.map(i=>`<button class="res" dir="ltr" data-act="jump" data-s="${i}"><em>#${fa(i+1)}</em>${esc(book.sentences[i].slice(0,140))}</button>`).join('') : '<p class="sub">چیزی پیدا نشد.</p>';
+  box.innerHTML = hits.length ? hits.map(i=>`<button class="res" dir="ltr" data-act="jump" data-s="${i}"><em>#${fa(i+1)}</em>${esc(book.sentences[i].slice(0,140))}</button>`).join('') : `<p class="sub">${tt('Nothing found.','چیزی پیدا نشد.')}</p>`;
 }
 function setPos(i){
   const t=S.tracks[curLang], m=t.books[t.bookId]; if(!m) return;
-  m.pos=Math.max(0, Math.min(i, (m.total||1)-1)); m.last=null; save(); toast('✓ نقطهٔ شروع تنظیم شد'); renderTrack(curLang);
+  m.pos=Math.max(0, Math.min(i, (m.total||1)-1)); m.last=null; save(); toast(tt('✓ Starting point set','✓ نقطهٔ شروع تنظیم شد')); renderTrack(curLang);
 }
 document.addEventListener('input', ev=>{
   if(!curLang) return; const t=S.tracks[curLang], id=ev.target.id;
-  if(id==='minutes'){ t.minutes=+ev.target.value; $('#minout').textContent=fa(t.minutes)+' دقیقه'; save(); }
+  if(id==='minutes'){ t.minutes=+ev.target.value; $('#minout').textContent=tt(`${fa(t.minutes)} min`,`${fa(t.minutes)} دقیقه`); save(); }
   if(id==='speed'){ t.speed=+ev.target.value; $('#spout').textContent='×'+fa(t.speed); save(); }
 });
 document.addEventListener('change', async ev=>{
@@ -1109,10 +1124,10 @@ document.addEventListener('change', async ev=>{
 });
 document.addEventListener('keydown', ev=>{ if(ev.key==='Enter' && ev.target.id==='q') doSearch(); });
 async function handleFile(f){
-  const msg=$('#impmsg'); msg.className='msg'; msg.textContent='در حال خواندن فایل…';
+  const msg=$('#impmsg'); msg.className='msg'; msg.textContent=tt('Reading file…','در حال خواندن فایل…');
   try{
     const name=f.name.toLowerCase(); let raw;
-    if(name.endsWith('.json')){ const pk=parsePack(await f.text()); if(!pk) throw new Error('این فایل بستهٔ شادوینگ معتبر نیست.'); await importPack(pk); return; }
+    if(name.endsWith('.json')){ const pk=parsePack(await f.text()); if(!pk) throw new Error(tt('This file is not a valid shadowing pack.','این فایل بستهٔ شادوینگ معتبر نیست.')); await importPack(pk); return; }
     if(name.endsWith('.pdf')){
       const pdf = await openPdf(f), n=pdf.numPages;
       let letters=0; const probe=Math.min(n,6);
@@ -1120,33 +1135,33 @@ async function handleFile(f){
       if(letters/probe < 60){   // scanned: no real text layer
         pendingPdf={pdf, name:f.name.replace(/\.[^.]+$/,'')};
         msg.textContent='';
-        $('#pdfrange').innerHTML = `<div class="hint" style="margin-bottom:8px"><b>این PDF اسکن‌شده است (${fa(n)} صفحه).</b><br>متن با تشخیص نوری (OCR) روی خود گوشی خوانده می‌شود؛ هر صفحه چند ثانیه. بهتر است هر بار چند درس را جدا وارد کنی و بعداً با گزینهٔ «اضافه به انتهای کتاب» ادامه بدهی.
-          <div class="row" style="margin-top:8px"><label>از صفحهٔ</label><input type="number" id="pfrom" min="1" max="${n}" value="1"><label>تا</label><input type="number" id="pto" min="1" max="${n}" value="${Math.min(n,15)}"></div>
-          <button class="primary small" style="margin-top:8px" data-act="pdfocr">شروع تشخیص متن</button></div>`;
+        $('#pdfrange').innerHTML = `<div class="hint" style="margin-bottom:8px">${tt(`<b>This PDF is scanned (${fa(n)} pages).</b><br>Text is recognized on your device (OCR), a few seconds per page. It's best to import a lesson or two at a time and continue later with "Add to the end of".`,`<b>این PDF اسکن‌شده است (${fa(n)} صفحه).</b><br>متن با تشخیص نوری (OCR) روی خود گوشی خوانده می‌شود؛ هر صفحه چند ثانیه. بهتر است هر بار چند درس را جدا وارد کنی و بعداً با گزینهٔ «اضافه به انتهای کتاب» ادامه بدهی.`)}
+          <div class="row" style="margin-top:8px"><label>${tt('From page','از صفحهٔ')}</label><input type="number" id="pfrom" min="1" max="${n}" value="1"><label>${tt('to','تا')}</label><input type="number" id="pto" min="1" max="${n}" value="${Math.min(n,15)}"></div>
+          <button class="primary small" style="margin-top:8px" data-act="pdfocr">${tt('Start text recognition','شروع تشخیص متن')}</button></div>`;
         return;
       }
-      raw = await pdfToText(pdf, (p,n)=>{ msg.textContent=`در حال خواندن PDF… صفحهٔ ${fa(p)} از ${fa(n)}`; });
+      raw = await pdfToText(pdf, (p,n)=>{ msg.textContent=tt(`Reading PDF… page ${fa(p)} of ${fa(n)}`,`در حال خواندن PDF… صفحهٔ ${fa(p)} از ${fa(n)}`); });
     }
     else if(name.endsWith('.epub')) raw = await epubToText(f);
     else raw = await f.text();
     const title = ($('#btitle').value.trim()) || f.name.replace(/\.[^.]+$/,'');
     if(raw.length <= 60000){ await pickFromText(raw, title); return; }
     const ap=$('#append'); const n = await importBook(curLang, title, raw, ap&&ap.checked ? S.tracks[curLang].bookId : null);
-    toast(`✓ «${title}» با ${fa(n)} جمله اضافه شد`, 4000); renderTrack(curLang);
-  }catch(e){ msg.className='msg err'; msg.textContent = e.message || 'خواندن فایل ناموفق بود.'; }
+    toast(tt(`✓ "${title}" added with ${fa(n)} sentences`,`✓ «${title}» با ${fa(n)} جمله اضافه شد`), 4000); renderTrack(curLang);
+  }catch(e){ msg.className='msg err'; msg.textContent = e.message || tt('Could not read the file.','خواندن فایل ناموفق بود.'); }
 }
 
 let pendingPdf=null;
 async function handleImages(files){
   files.sort((a,b)=>a.name.localeCompare(b.name, undefined, {numeric:true}) || a.lastModified-b.lastModified);
   try{
-    await processPages(files.map(f=>()=>imageCanvas(f)), k=>`عکس ${fa(k+1)}`, 'درس '+new Date().toLocaleDateString('fa-IR'));
-  }catch(e){ const m=$('#impmsg'); if(m){ m.className='msg err'; m.textContent='تشخیص متن ناموفق بود: '+(e.message||e); } }
+    await processPages(files.map(f=>()=>imageCanvas(f)), k=>tt(`photo ${fa(k+1)}`,`عکس ${fa(k+1)}`), tt('Lesson ','درس ')+new Date().toLocaleDateString(loc()));
+  }catch(e){ const m=$('#impmsg'); if(m){ m.className='msg err'; m.textContent=tt('Text recognition failed: ','تشخیص متن ناموفق بود: ')+(e.message||e); } }
 }
 
 /* ---------- boot ---------- */
 try{ if('serviceWorker' in navigator && !isFramed) window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{})); }catch(e){}
-if(!('speechSynthesis' in window)) setTimeout(()=>toast('این مرورگر از تبدیل متن به گفتار پشتیبانی نمی‌کند. Safari یا Chrome را امتحان کن.', 6000), 500);
+if(!('speechSynthesis' in window)) setTimeout(()=>toast(tt('This browser doesn\'t support text-to-speech. Try Safari or Chrome.','این مرورگر از تبدیل متن به گفتار پشتیبانی نمی‌کند. Safari یا Chrome را امتحان کن.'), 6000), 500);
 renderHome();
 </script>
 </body>

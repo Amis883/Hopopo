@@ -1,15 +1,15 @@
 {
-  "name": "Hopopo — شادوینگ روزانه",
+  "name": "Hopopo — Daily shadowing",
   "short_name": "Hopopo",
-  "description": "تمرین روزانهٔ شادوینگ انگلیسی و آلمانی از روی کتاب خودت",
+  "description": "Daily shadowing practice for English and German from your own textbook",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#f6f3ee",
   "theme_color": "#1d2433",
-  "lang": "fa",
-  "dir": "rtl",
+  "lang": "en",
+  "dir": "auto",
   "icons": [
     {
       "src": "icons/icon-192.png",
