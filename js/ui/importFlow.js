@@ -3,8 +3,9 @@
 import { lang as langInfo, isRtl } from '../core/languages.js';
 import { heuristicPick, linesToText } from '../core/text.js';
 import { parsePack, makePack, packFileName } from '../core/packs.js';
+import { readId3Txxx, id3Size, timelineToBook } from '../core/timeline.js';
 import { S, addTrack } from '../data/store.js';
-import { getBook, importSentences, importText } from '../data/books.js';
+import { getBook, importSentences, importText, importAudioBook } from '../data/books.js';
 import { openPdf, pdfLooksScanned, pdfToText, pdfPageCanvas, imageCanvas, canvasBlob, epubToText } from '../services/importers.js';
 import { recognize } from '../services/ocr.js';
 import { getClaude, imageBatchSize, selectMaterial } from '../services/claude.js';
@@ -20,6 +21,7 @@ export function importPanel(l, meta, open) {
   return `<details class="import" ${open ? 'open' : ''}><summary>➕ ${tt(`Add a ${langName(l)} book or lesson`, `افزودن کتاب یا درس ${langName(l)}`)}</summary>
       <label class="file">📷 ${tt('Photos of book pages', 'عکس صفحه‌های کتاب')}<br><small>${tt('You can select several photos at once (in page order)', 'می‌توانی چند عکس را با هم انتخاب کنی (به ترتیب صفحه)')}</small><input type="file" id="imgs" accept="image/*" multiple></label>
       <label class="file">📄 ${tt('Book file', 'فایل کتاب')}<br><small>${tt('PDF (scanned or text), EPUB, TXT or a shadowing pack (.json)', 'PDF (اسکن‌شده یا متنی)، EPUB، TXT یا بستهٔ شادوینگ (.json)')}</small><input type="file" id="file" accept=".pdf,.epub,.txt,.md,.json,text/plain,application/json,application/pdf,application/epub+zip"></label>
+      <label class="file">🎧 ${tt('Recorded audio lesson (MP3 + timeline)', 'درس صوتی ضبط‌شده (MP3 + timeline)')}<br><small>${tt('Made with', 'ساخته‌شده با')} <a href="https://github.com/salmansoltaniyan/Dutch-Language-Shadowing-Audio-Generator" target="_blank" rel="noopener">Shadowing Audio Generator</a> — ${tt('natural neural voices + translations', 'صدای طبیعی + ترجمه')}</small><input type="file" id="audio" accept=".mp3,.json,audio/mpeg,application/json" multiple></label>
       <div id="pdfrange"></div>
       ${meta && !meta.sample ? `<label class="check" style="margin:8px 0"><input type="checkbox" id="append"> ${tt('Add to the end of', 'اضافه شود به انتهای')} «<bdi>${esc(meta.title)}</bdi>»</label>` : ''}
       <p class="hint">${tt('Give it the pages of one lesson: the app keeps dialogues, reading texts and useful everyday phrases, and drops exercises, tables and instructions. You can review the picks before adding. For photos: good light, flat page, one page per photo.', 'صفحه‌های یک درس را بده؛ اپ خودش گفت‌وگوها، متن‌های خواندنی و جمله‌های کاربردی روزمره را جدا می‌کند و تمرین‌ها، جدول‌ها و دستورالعمل‌ها را کنار می‌گذارد. قبل از افزودن می‌توانی انتخاب‌ها را ببینی و عوض کنی. برای عکس: نور خوب، صفحهٔ صاف، هر عکس یک صفحه.')}</p>
@@ -138,20 +140,50 @@ async function handleFile(f) {
   } catch (e) { say(e.message || tt('Could not read the file.', 'خواندن فایل ناموفق بود.'), true); }
 }
 
+/* ---------- recorded lessons from the audio generator ---------- */
+
+/** Reads only the ID3 tag at the start of the MP3 and returns its embedded timeline, if any. */
+async function timelineFromMp3(file) {
+  const size = id3Size(await file.slice(0, 10).arrayBuffer());
+  if (!size) return null;
+  const txt = readId3Txxx(await file.slice(0, size).arrayBuffer());
+  try { return txt ? JSON.parse(txt) : null; } catch (e) { return null; }
+}
+
+async function handleAudio(files) {
+  say(tt('Reading audio lesson…', 'در حال خواندن درس صوتی…'));
+  try {
+    const mp3 = files.find(f => /\.mp3$/i.test(f.name) || f.type === 'audio/mpeg');
+    const json = files.find(f => /\.json$/i.test(f.name));
+    if (!mp3) throw new Error(tt('Choose the lesson MP3 (and its .json timeline if you have it).', 'فایل MP3 درس را انتخاب کن (و اگر داری، فایل timeline با پسوند json).'));
+    let tl = null;
+    if (json) { try { tl = JSON.parse(await json.text()); } catch (e) { tl = null; } }
+    if (!tl) tl = await timelineFromMp3(mp3);
+    if (!tl) throw new Error(tt('No timeline found. Select the .json file that was saved next to the MP3, or use a newer version of the generator.', 'timeline پیدا نشد. فایل json کنار MP3 را هم انتخاب کن، یا از نسخهٔ جدیدتر سازنده استفاده کن.'));
+    const data = timelineToBook(tl, ui.lang);
+    if (!data) throw new Error(noText());
+    if (!S.tracks[data.lang]) addTrack(data.lang, 'A1');
+    const title = $('#btitle').value.trim() || data.title || mp3.name.replace(/\.mp3$/i, '');
+    const n = await importAudioBook(data.lang, title, data, mp3);
+    toast(tt(`🎧 "${title}" added: ${num(n)} sentences with recorded voice`, `🎧 «${title}» اضافه شد: ${num(n)} جمله با صدای ضبط‌شده`), 4500);
+    renderTrack(data.lang);
+  } catch (e) { say(e.message || String(e), true); }
+}
+
 /* ---------- packs ---------- */
 
 async function importPack(p) {
   if (!p.sentences.length) throw new Error(tt('This pack is empty.', 'این بسته خالی است.'));
   const l = p.lang, title = String(p.title || tt('Shadowing pack', 'بستهٔ شادوینگ'));
   if (!S.tracks[l]) addTrack(l, p.level || 'A1');
-  const n = await importSentences(l, title, p.sentences, l === ui.lang ? appendTarget() : null, noText());
+  const n = await importSentences(l, title, p.sentences, l === ui.lang ? appendTarget() : null, noText(), p.translations);
   toast(tt(`✓ "${title}" (${num(n)} sentences) added to ${langName(l)}`, `✓ «${title}» (${num(n)} جمله) به ${langName(l)} اضافه شد`), 4500);
   renderTrack(l);
 }
 
 async function shareBook(id) {
   const l = ui.lang, t = S.tracks[l], m = t.books[id], b = await getBook(l, id); if (!m || !b) return;
-  const json = makePack({ lang: l, level: t.level, title: m.title, sentences: b.sentences });
+  const json = makePack({ lang: l, level: t.level, title: m.title, sentences: b.sentences, translations: b.translations });
   if (!isFramed) {
     const file = new File([json], packFileName(m.title), { type: 'application/json' });
     try { if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: m.title }); return; } }
@@ -206,5 +238,6 @@ export const actions = {
 export function onChange(ev) {
   const { id } = ev.target;
   if (id === 'file') { const f = ev.target.files[0]; if (f) handleFile(f); ev.target.value = ''; }
+  if (id === 'audio') { const fs = [...ev.target.files]; if (fs.length) handleAudio(fs); ev.target.value = ''; }
   if (id === 'imgs') { const fs = [...ev.target.files]; if (fs.length) handleImages(fs); ev.target.value = ''; }
 }

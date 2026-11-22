@@ -6,6 +6,8 @@ import { dayKey, stats } from '../core/stats.js';
 import { S, save } from '../data/store.js';
 import { getBook } from '../data/books.js';
 import { speak, stopSpeaking, unlockAudio, listenOnce, recognitionBlocked } from '../services/speech.js';
+import { unlockClips, useAudio, playClip, stopClip } from '../services/audioclip.js';
+import { PROFILES } from '../core/languages.js';
 import { tt, num, langName, phaseText, weekdays, getUI } from '../i18n.js';
 import { app, $, esc, toast, ui, isFramed, mmss } from './dom.js';
 import { renderTrack } from './track.js';
@@ -20,14 +22,16 @@ const live = tok => R && tok === R.token;
 const track = () => S.tracks[R.lang];
 
 export async function startSession(l) {
-  unlockAudio(); // must run synchronously inside the click for iOS
+  unlockAudio(); unlockClips(); // must run synchronously inside the click for iOS
   const t = S.tracks[l], meta = t.books[t.bookId];
   if (!meta) { toast(tt('Add or choose a book first', 'اول یک کتاب اضافه یا انتخاب کن')); return renderTrack(l); }
   const book = await getBook(l, t.bookId);
   if (!book) { toast(tt('This book\'s text isn\'t in this browser; import it again.', 'متن این کتاب در این مرورگر پیدا نشد؛ دوباره واردش کن.')); return renderTrack(l); }
-  const plan = buildPlan(t, meta, book.sentences);
+  const isAudio = book.kind === 'audio';
+  if (isAudio) useAudio(book.audio);
+  const plan = buildPlan(t, meta, book.sentences, { wholeSentences: isAudio });
   if (plan.newCount === 0) { toast(tt('You finished this book! 🎉 Add a new one or restart it.', 'این کتاب تمام شد! 🎉 کتاب جدید اضافه کن یا از اول شروع کن.'), 5000); return renderTrack(l); }
-  R = { lang: l, bookId: t.bookId, plan, i: 0, token: 0, playing: false, elapsed: 0, showText: true, scores: [] };
+  R = { lang: l, bookId: t.bookId, book, plan, i: 0, token: 0, playing: false, elapsed: 0, showText: true, scores: [] };
   render(); wakeLock(true); runFrom(0);
 }
 
@@ -40,6 +44,7 @@ function render() {
     <div class="phase" id="phase"></div>
     <div class="counter" id="counter"></div>
     <div class="textcard ${/A/.test(t.level) ? 'lvl-a' : ''}" id="textcard" dir="${isRtl(R.lang) ? 'rtl' : 'ltr'}" lang="${L.tts}" style="text-align:start"></div>
+    <div class="trans" id="trans" dir="auto"></div>
     <div class="heard" id="heard"></div>
     <div class="gap" id="gap"><div class="gapbar"><i id="gapfill"></i></div><span id="gaptext">${tt('Your turn — repeat it aloud', 'نوبت توئه — بلند تکرار کن')}</span></div>
     <div class="controls" dir="ltr">
@@ -66,6 +71,22 @@ function translateTo(l) {
   return dev !== l ? dev : (l === 'en' ? 'de' : 'en');
 }
 
+/* ---------- recorded audio (audio books) vs. speech synthesis ---------- */
+const isAudioBook = () => R.book && R.book.kind === 'audio';
+const translationOf = c => (R.book && R.book.translations && R.book.translations[c.sent]) || '';
+/** Recorded audio is already at the generator's lesson speed: early phases play it slightly slower, never faster. */
+function audioRate(r) {
+  const prof = PROFILES[track().level], top = Math.max(prof.finalRate, ...prof.phases.map(p => p.r));
+  return Math.max(.5, Math.min(1.5, (r / top) * (track().speed || 1)));
+}
+/** How long the model sentence takes at this rate (sizes the learner's turn). */
+const voiceDur = (c, r) => isAudioBook() ? (R.book.clips[c.sent][1] - R.book.clips[c.sent][0]) / audioRate(r) : estDur(c.text, r, R.lang);
+function voice(c, r) {
+  if (!isAudioBook()) return speak(c.text, r, track(), highlight);
+  const [a, b] = R.book.clips[c.sent];
+  return playClip(a, b, audioRate(r), p => highlight(Math.floor(p * c.text.length)));
+}
+
 const curStep = () => R.plan.steps[Math.min(R.i, R.plan.steps.length - 1)];
 
 function update() {
@@ -78,7 +99,9 @@ function update() {
     : `${st.sec === 'final' ? tt('Continuous pass – ', 'دور پیوسته – ') : ''}${tt(`Chunk ${num(st.k - firstNew + 1)} of ${num(R.plan.newCount)}`, `تکهٔ ${num(st.k - firstNew + 1)} از ${num(R.plan.newCount)}`)}`;
   const tc = $('#textcard');
   if (tc.dataset.k !== String(st.k)) { tc.dataset.k = st.k; tc.innerHTML = '<p class="tx">' + wordsHtml(c.text) + '</p>'; tc.classList.remove('peek'); }
-  tc.classList.toggle('blind', !R.showText || !!st.ph.blind);
+  const hidden = !R.showText || !!st.ph.blind;
+  tc.classList.toggle('blind', hidden);
+  const tr = $('#trans'); tr.textContent = translationOf(c); tr.classList.toggle('blindtrans', hidden && !tc.classList.contains('peek'));
   $('#ttext').textContent = R.showText ? tt('🙈 Hide text', '🙈 پنهان کردن متن') : tt('👁 Show text', '👁 نمایش متن');
   $('#trlink').href = `https://translate.google.com/?sl=${R.lang}&tl=${translateTo(R.lang)}&text=${encodeURIComponent(c.text)}&op=translate`;
   $('#playbtn').textContent = R.playing ? '⏸' : '▶';
@@ -118,7 +141,7 @@ async function runFrom(i) {
     commitProgress(); update();
     const st = R.plan.steps[R.i], c = R.plan.chunks[st.k];
     clearMarks();
-    await speak(c.text, st.ph.r, track(), highlight);
+    await voice(c, st.ph.r);
     clearHl();
     if (!live(tok)) return;
     if (st.ph.t === 'check') { await learnerTurn(st, c, tok); if (!live(tok)) return; }
@@ -132,13 +155,13 @@ async function runFrom(i) {
 
 async function silentGap(c, st, tok) {
   const g = $('#gap'); g.classList.add('on');
-  await wait((estDur(c.text, st.ph.r, R.lang) * 1.25 + 1) * 1000, tok, p => { const f = $('#gapfill'); if (f) f.style.width = (100 - 100 * p) + '%'; });
+  await wait((voiceDur(c, st.ph.r) * 1.25 + 1) * 1000, tok, p => { const f = $('#gapfill'); if (f) f.style.width = (100 - 100 * p) + '%'; });
   g.classList.remove('on');
 }
 
 /** Listen to the learner, score, and show per-word marks. Falls back to a silent gap without a mic. */
 async function learnerTurn(st, c, tok) {
-  const dur = estDur(c.text, st.ph.r, R.lang), g = $('#gap'), gt = $('#gaptext'), hd = $('#heard');
+  const dur = voiceDur(c, st.ph.r), g = $('#gap'), gt = $('#gaptext'), hd = $('#heard');
   gt.textContent = tt('🎙 Now say it… I\'m listening', '🎙 حالا بگو… گوش می‌دهم'); gt.classList.add('listening'); $('#gapfill').style.width = '100%'; g.classList.add('on');
   const heard = await listenOnce(R.lang, (dur * 1.8 + 4) * 1000, () => !live(tok), t => { hd.innerHTML = `<span class="lbl">${tt('I heard: ', 'شنیدم: ')}</span><span class="txt">${esc(t)}</span>`; });
   g.classList.remove('on'); gt.classList.remove('listening'); gt.textContent = tt('Your turn — repeat it aloud', 'نوبت توئه — بلند تکرار کن');
@@ -162,7 +185,7 @@ async function learnerTurn(st, c, tok) {
   await wait(res.score >= 85 ? 1600 : 2800, tok);
 }
 
-function stopAudio() { if (!R) return; R.token++; stopSpeaking(); const g = $('#gap'); if (g) g.classList.remove('on'); clearHl(); }
+function stopAudio() { if (!R) return; R.token++; stopSpeaking(); stopClip(); const g = $('#gap'); if (g) g.classList.remove('on'); clearHl(); }
 function pause() { stopAudio(); R.playing = false; update(); }
 
 /** Progress is saved per sentence as the runner reaches it, so leaving mid-session loses nothing. */
@@ -213,7 +236,7 @@ function againFinal() {
   const steps = R.plan.steps.filter(s => s.sec === 'final');
   if (!steps.length) return renderHome();
   R = { ...R, plan: { ...R.plan, steps }, i: 0, token: 0, playing: false, elapsed: 0, extra: true, scores: [] };
-  unlockAudio(); render(); wakeLock(true); runFrom(0);
+  unlockAudio(); unlockClips(); render(); wakeLock(true); runFrom(0);
 }
 
 function askQuit() {

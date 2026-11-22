@@ -30,7 +30,7 @@ export async function renderTrack(l) {
   <header class="top"><button class="icon" data-act="home" aria-label="Back">${tt('←', '→')}</button><h2>${langName(l)}${L.native !== langName(l) ? ' – ' + esc(L.native) : ''}</h2></header>
   <section class="card"><h3>${tt('Books', 'کتاب‌ها')}</h3>
     ${books.length ? books.map(([id, b]) => `<div class="bookitem ${id === t.bookId ? 'active' : ''}">
-      <button data-act="selbook" data-id="${id}"><bdi>${esc(b.title)}</bdi><small>${tt(`${num(b.pos)} of ${num(b.total || 0)} sentences`, `${num(b.pos)} از ${num(b.total || 0)} جمله`)}</small></button>
+      <button data-act="selbook" data-id="${id}">${b.kind === 'audio' ? '🎧 ' : ''}<bdi>${esc(b.title)}</bdi><small>${tt(`${num(b.pos)} of ${num(b.total || 0)} sentences`, `${num(b.pos)} از ${num(b.total || 0)} جمله`)}</small></button>
       <button class="icon" data-act="sharebook" data-id="${id}" aria-label="Share">📤</button>
       <button class="icon del" data-act="delbook" data-id="${id}" aria-label="Delete">🗑</button></div>`).join('') : `<p class="sub">${tt('No books yet.', 'کتابی نیست.')}</p>`}
     ${importPanel(l, meta, books.length <= 1)}

@@ -148,3 +148,8 @@ input[type=range]{width:100%;accent-color:var(--acc)}
 .danger{color:var(--danger);border-color:var(--danger)}
 .code{font-size:.95rem}
 
+.trans{margin-top:8px;text-align:center;color:var(--muted);font-size:.95rem;min-height:1.2em;transition:filter .25s}
+.blindtrans{filter:blur(6px)}
+.badge.audio{background:var(--ink)}
+.credit{font-size:.8rem;color:var(--muted);margin-top:4px}
+.credit a{color:inherit}

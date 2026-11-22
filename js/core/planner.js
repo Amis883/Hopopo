@@ -29,14 +29,16 @@ export function stepTime(text, type, rate, lang) {
  *  3. final:  one continuous shadowing pass over all new chunks
  * A step is { k: chunkIndex, sec: 'review'|'main'|'final', ph: {t, r, ...} }.
  */
-export function buildPlan(track, meta, sentences) {
+export function buildPlan(track, meta, sentences, { wholeSentences = false } = {}) {
   const prof = PROFILES[track.level], sp = track.speed || 1, lang = track.lang, target = track.minutes * 60;
+  // Recorded audio can't be cut inside a sentence, so audio books use whole sentences as chunks.
+  const chunk = s => wholeSentences ? [s] : chunkSentence(s, prof.maxWords, lang);
   const phases = phasesFor(track);
   const chunks = [], steps = []; let est = 0;
 
   if (track.warmup && meta.last && meta.last[1] > meta.last[0] && meta.last[1] <= sentences.length) {
     for (let s = Math.max(meta.last[0], meta.last[1] - 2); s < meta.last[1]; s++) {
-      for (const c of chunkSentence(sentences[s], prof.maxWords, lang)) {
+      for (const c of chunk(sentences[s])) {
         const k = chunks.push({ text: c, sent: s }) - 1;
         steps.push({ k, sec: 'review', ph: { t: 'shadow', r: prof.finalRate * sp } });
         est += stepTime(c, 'shadow', prof.finalRate * sp, lang);
@@ -46,7 +48,7 @@ export function buildPlan(track, meta, sentences) {
 
   const firstNew = chunks.length; let s = meta.pos;
   while (s < sentences.length) {
-    const cs = chunkSentence(sentences[s], prof.maxWords, lang);
+    const cs = chunk(sentences[s]);
     let add = 0;
     for (const c of cs) {
       for (const ph of phases) add += stepTime(c, ph.t, ph.r * sp, lang);

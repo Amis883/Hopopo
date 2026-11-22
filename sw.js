@@ -1,11 +1,11 @@
 // Offline support. App shell is pre-cached; everything else (OCR engine, language data, fonts)
 // is cached on first use. Pages are network-first so new versions arrive; assets are cache-first.
-const CACHE = 'hopopo-v3';
+const CACHE = 'hopopo-v4';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './css/app.css',
   './js/main.js', './js/i18n.js',
-  './js/core/languages.js', './js/core/text.js', './js/core/planner.js', './js/core/scoring.js', './js/core/stats.js', './js/core/packs.js',
+  './js/core/languages.js', './js/core/text.js', './js/core/planner.js', './js/core/scoring.js', './js/core/stats.js', './js/core/packs.js', './js/core/timeline.js',
   './js/data/store.js', './js/data/books.js',
-  './js/services/speech.js', './js/services/importers.js', './js/services/ocr.js', './js/services/claude.js',
+  './js/services/speech.js', './js/services/importers.js', './js/services/ocr.js', './js/services/claude.js', './js/services/audioclip.js',
   './js/ui/dom.js', './js/ui/home.js', './js/ui/track.js', './js/ui/importFlow.js', './js/ui/session.js',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
 

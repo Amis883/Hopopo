@@ -43,11 +43,12 @@ export async function getBook(lang, id) {
 }
 
 /** Adds sentences as a new book, or appends them to `appendId`. Returns the number added. */
-export async function importSentences(lang, title, sentences, appendId, emptyMessage = 'No usable text found.') {
+export async function importSentences(lang, title, sentences, appendId, emptyMessage = 'No usable text found.', translations = null) {
   const t = S.tracks[lang];
   if (appendId && sentences.length) {
     const book = await getBook(lang, appendId), meta = t.books[appendId];
-    if (book && meta) {
+    if (book && meta && book.kind !== 'audio') {
+      if (translations || book.translations) book.translations = (book.translations || new Array(book.sentences.length).fill('')).concat(translations || new Array(sentences.length).fill(''));
       book.sentences = book.sentences.concat(sentences);
       await DB.put('book:' + appendId, book);
       meta.total = book.sentences.length; save();
@@ -57,10 +58,25 @@ export async function importSentences(lang, title, sentences, appendId, emptyMes
   if (sentences.length < 3) throw new Error(emptyMessage);
   const id = 'b' + Date.now().toString(36);
   const book = { id, lang, title, sentences };
+  if (translations) book.translations = translations;
   await DB.put('book:' + id, book); cache.set(id, book);
   t.books[id] = { title, pos: 0, total: sentences.length, last: null };
   t.bookId = id; save();
   return sentences.length;
+}
+
+/**
+ * Audio book: a recorded lesson (MP3 blob) + per-sentence clips [start, end] and translations,
+ * built from the audio generator's timeline (core/timeline.js).
+ */
+export async function importAudioBook(lang, title, data, audio) {
+  const t = S.tracks[lang];
+  const id = 'a' + Date.now().toString(36);
+  const book = { id, lang, title, kind: 'audio', sentences: data.sentences, clips: data.clips, translations: data.translations, audio };
+  await DB.put('book:' + id, book); cache.set(id, book);
+  t.books[id] = { title, pos: 0, total: data.sentences.length, last: null, kind: 'audio' };
+  t.bookId = id; save();
+  return data.sentences.length;
 }
 
 export const importText = (lang, title, raw, appendId, emptyMessage) => importSentences(lang, title, textToSentences(raw, lang), appendId, emptyMessage);

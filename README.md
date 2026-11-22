@@ -18,6 +18,16 @@
 - **Streaks and progress per language.** Share prepared lessons with friends as `.shadow.json` packs.
 - **Interface in English or Persian** (RTL). Private by design: no account, no server, data stays on your device.
 
+### Works with Shadowing Audio Generator 🎧
+Hopopo pairs with **[Dutch Language Shadowing Audio Generator](https://github.com/salmansoltaniyan/Dutch-Language-Shadowing-Audio-Generator)** by [Salman Soltaniyan](https://github.com/salmansoltaniyan), a tool that renders a lesson to MP3 with natural neural voices (Google Chirp 3 HD / Microsoft Edge) and adds a translation after each sentence.
+
+| | Audio Generator | Hopopo |
+|---|---|---|
+| Role | **Produces** the audio: studio-quality voices, translations, repeats and pauses | **Runs the practice**: daily plan, speech check, progress, streaks |
+| Runs on | Windows / Python | Any phone browser (installable PWA) |
+
+Open the generated **MP3** in Hopopo (*Book & settings → 🎧 Recorded audio lesson*). Hopopo reads the timeline the generator embeds in the MP3 (ID3 `TXXX:SHADOWING_TIMELINE`, or the `.json` next to it), detects the language, and turns every sentence into a step: you hear the **recorded voice**, see the **translation** under the sentence, then say it and get it checked. The shared timeline format is the contract between the two projects (see [ARCHITECTURE.md §5.7](ARCHITECTURE.md#57-interop-with-the-audio-generator)).
+
 Architecture, design decisions and testing: **[ARCHITECTURE.md](ARCHITECTURE.md)**.
 
 ### Install on your phone
@@ -43,5 +53,7 @@ No build step: plain HTML, CSS and native ES modules. Third-party libraries are 
 - **جلسه‌های ۱۰ تا ۲۰ دقیقه‌ای متناسب با سطحت (A1 تا C1):** گوش دادن، گفتن و بررسی (۲ بار)، و شادوینگ همزمان.
 - **بررسی گفتار:** کلمه‌های درست سبز، تقریباً درست نارنجی و اشتباه یا جاافتاده قرمز می‌شوند.
 - **زبان خود اپ** انگلیسی یا فارسی است و با دکمهٔ «فا / EN» در صفحهٔ اول عوض می‌شود.
+
+- **همکاری با [Shadowing Audio Generator](https://github.com/salmansoltaniyan/Dutch-Language-Shadowing-Audio-Generator):** فایل MP3 ساخته‌شده با آن ابزار (صدای طبیعی + ترجمهٔ فارسی) را در Hopopo باز کن تا جلسه‌های تمرین با همان صدا، ترجمه و بررسی گفتار اجرا شود.
 
 **نصب:** آدرس بالا را در Safari آیفون (Share ← Add to Home Screen) یا Chrome اندروید (⋮ ← Install app) باز کن.

@@ -57,9 +57,10 @@ flowchart TD
 | `core/planner.js` | Builds a session plan that fits the time budget; chunk navigation helpers |
 | `core/scoring.js` | Aligns what was heard to the target (edit-distance DP) → per-word marks + score |
 | `core/stats.js`, `core/packs.js` | Streaks/week view; shareable lesson format |
+| `core/timeline.js` | Interop: reads the audio generator's timeline (JSON or ID3 `TXXX` inside the MP3) into an audio book |
 | `data/store.js` | App state in `localStorage` with schema migration |
 | `data/books.js` | Book sentences in IndexedDB, in-memory cache, append/import/delete |
-| `services/*` | Thin adapters over Web Speech, pdf.js, JSZip, Tesseract, Claude |
+| `services/*` | Thin adapters over Web Speech, pdf.js, JSZip, Tesseract, Claude, and clip playback of recorded MP3s (`audioclip.js`) |
 | `i18n.js` | Interface language (EN/FA), RTL switch, localized numbers |
 | `ui/*` | Screens; each exports an `actions` map |
 | `sw.js` | Service worker (offline) |
@@ -130,6 +131,16 @@ Recognition comes from the Web Speech API in the learner's language. Scoring ali
 * **Heavy assets** (OCR engine ~4 MB, language data, pdf.js, fonts): **cache-first**, cached the first time they're used.
 * OCR data for German/English ships inside the app (so it works offline and inside sandboxes that block downloads). The other 19 languages download once from jsDelivr through a small wrapper around the worker's `fetch`, so adding a language needs no rebuild.
 
+### 5.7 Interop with the audio generator
+
+[Shadowing Audio Generator](https://github.com/salmansoltaniyan/Dutch-Language-Shadowing-Audio-Generator) (Python) renders lessons to MP3 with neural cloud voices. It writes a **timeline**, `{audio, duration, segments: [{start, speech_end, end, row, tag, lang, text}]}`, both as a sidecar `.json` and inside the MP3 as the ID3 frame `TXXX:SHADOWING_TIMELINE`. That timeline is the integration contract: neither project imports the other's code.
+
+* **Reading:** only the ID3 header is read (`file.slice(0, tagSize)`), not the whole MP3. A ~60-line parser handles ID3v2.3/2.4, syncsafe sizes, extended headers and the four text encodings (Latin-1, UTF-16 with BOM, UTF-16BE, UTF-8).
+* **Mapping:** segments are grouped by `row`. The learning language is the track's language if present, else the most frequent non-Persian one. Segments in other languages become that row's **translation**. Repeats of a segment within a row (the generator's `repeats`) are de-duplicated. Each sentence keeps its clip `[start, speech_end]`; the generator's own pauses are ignored because Hopopo schedules its own turns.
+* **Playback:** an *audio book* stores the MP3 Blob in IndexedDB. The planner uses whole sentences as chunks (recorded audio can't be cut mid-sentence). The runner plays clips through one shared `<audio>` element (unlocked in the tap that starts the session, for iOS) at a rate relative to the profile's fastest phase, so A1's early phases are slightly slower but never faster than recorded. The learner's turn is sized from the real clip length instead of a text estimate. The text highlight follows playback progress.
+
+Why this split works: the generator does what needs a server and API keys (best-quality voices); Hopopo does what needs to be on the phone (daily practice, microphone, progress). Each stays simple.
+
 ### 5.6 Internationalisation
 
 Two independent axes:
@@ -153,8 +164,8 @@ Two independent axes:
 
 ## 7. Testing
 
-* **Unit tests:** `node --test` (no dependencies), 23 tests covering the pure core: text cleaning, sentence/chunk splitting (incl. Dutch conjunctions and Japanese), planning within budgets, warm-up/resume, alignment scoring, streaks, pack validation.
-* **End-to-end:** Playwright scripts drive the real UI in Chromium with mocked speech APIs and a mocked Claude: add a language → run a Dutch session with speech check → import a pasted lesson, photos (real OCR) and a scanned PDF → export a pack and import it on a "fresh device" → remove a language → switch to RTL.
+* **Unit tests:** `node --test` (no dependencies), 29 tests covering the pure core: text cleaning, sentence/chunk splitting (incl. Dutch conjunctions and Japanese), planning within budgets, warm-up/resume, alignment scoring, streaks, pack validation, and reading real generator MP3s (ID3v2.4/UTF-8 and v2.3/UTF-16 fixtures in `tests/fixtures/`).
+* **End-to-end:** Playwright scripts drive the real UI in Chromium with mocked speech APIs and a mocked Claude: add a language → run a Dutch session with speech check → import a pasted lesson, photos (real OCR) and a scanned PDF → export a pack and import it on a "fresh device" → remove a language → switch to RTL → import a generator MP3 and practise with the recorded voice and translations.
 
 Run unit tests with `npm test`.
 
