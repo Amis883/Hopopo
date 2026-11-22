@@ -7,6 +7,7 @@ import { app, esc, ui, isFramed, isStandalone, toast } from './dom.js';
 import { renderTrack } from './track.js';
 
 export function renderHome() {
+  if (ui.pendingReload) { location.reload(); return; }   // an update arrived during the session
   if (!S.order.length) return import('./welcome.js').then(m => m.renderWelcome());
   ui.view = 'home'; ui.lang = null;
   const today = new Intl.DateTimeFormat(locale(), { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
@@ -15,7 +16,16 @@ export function renderHome() {
   ${S.order.map((l, i) => trackCard(l, i)).join('')}
   ${addLanguageCard()}
   ${installCard()}
-  <p class="foot">${tt('A little, every day. 10–20 minutes is enough.', 'کم، ولی هر روز. ۱۰ تا ۲۰ دقیقه کافی است.')}</p>`;
+  <p class="foot">${tt('A little, every day. 10–20 minutes is enough.', 'کم، ولی هر روز. ۱۰ تا ۲۰ دقیقه کافی است.')}<br><small id="ver"></small></p>`;
+  showVersion();
+}
+
+/** The installed version = the service worker's cache name (sw.js is the single source of truth). */
+async function showVersion() {
+  try {
+    const v = (await caches.keys()).find(k => k.startsWith('hopopo-'));
+    const el = document.getElementById('ver'); if (v && el) el.textContent = 'v' + v.slice(7);
+  } catch (e) { /* caches unavailable (e.g. embedded preview) */ }
 }
 
 function trackCard(l, index) {

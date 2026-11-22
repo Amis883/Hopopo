@@ -127,6 +127,8 @@ Recognition comes from the Web Speech API in the learner's language. Scoring ali
 
 **Failure handling.** Phone recognizers often end a session before the learner starts speaking, or return nothing. So `listenOnce` restarts recognition while the turn still has time, and reports `{text, error}` instead of guessing. An empty result is shown as "didn't catch that", never as all-red, because a microphone problem must not look like a learner mistake. After three failed turns in a row the check switches itself off for the session and the turn becomes a silent repeat gap. "Test the speech check" in settings shows exactly what the phone hears, or the error code, so problems can be diagnosed on the user's device.
 
+**Updates.** An installed PWA is usually resumed, not restarted, so it would keep running old code. On every resume the app calls `registration.update()`. A changed `sw.js` installs, takes control (`skipWaiting` + `clients.claim`) and fires `controllerchange`, and the app reloads at once on the home screens or after the current session. A release is therefore *bump `VERSION` in `sw.js`*. The same constant names the cache and is shown on the home screen.
+
 **Leaving a session always works.** Stopping is idempotent and guarded step by step (speech, clip, recognition, wake lock, save). The session pushes a history entry, so the phone's back gesture exits cleanly, and unexpected errors surface as a toast instead of a frozen screen.
 
 ### 5.5 Offline (`sw.js`)

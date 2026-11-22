@@ -28,7 +28,30 @@ document.addEventListener('change', ev => { importFlow.onChange(ev); track.onCha
 document.addEventListener('keydown', ev => track.onKeydown(ev));
 
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); ui.deferredInstall = e; if (ui.view === 'home') home.renderHome(); });
-if ('serviceWorker' in navigator && !isFramed) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+/*
+ * Self-update for the installed app. Phones resume a PWA instead of restarting it, so on every
+ * resume we ask the browser to re-check sw.js. A new service worker takes over (skipWaiting +
+ * clients.claim) and fires `controllerchange`; we then reload — immediately on the home screens,
+ * or after the current session so practice is never interrupted.
+ */
+if ('serviceWorker' in navigator && !isFramed) {
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloading) return;            // first install: nothing to update
+    reloading = true;
+    if (ui.view === 'session') { ui.pendingReload = true; toast(tt('A new version is ready — it will load after this session.', 'نسخهٔ جدید آماده است — بعد از این جلسه بارگذاری می‌شود.'), 5000); }
+    else location.reload();
+  });
+  window.addEventListener('load', async () => {
+    try {
+      const reg = await navigator.serviceWorker.register('sw.js');
+      const check = () => reg.update().catch(() => {});
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+      setInterval(check, 30 * 60 * 1000);
+    } catch (e) { /* offline or unsupported */ }
+  });
+}
 if (!ttsSupported()) setTimeout(() => toast(tt('This browser doesn\'t support text-to-speech. Try Safari or Chrome.', 'این مرورگر از تبدیل متن به گفتار پشتیبانی نمی‌کند. Safari یا Chrome را امتحان کن.'), 6000), 500);
 
 /** Show unexpected errors instead of failing silently, so problems can be reported with a screenshot. */
