@@ -51,7 +51,11 @@ export async function renderTrack(l) {
       <div class="msg">${speechNote}</div>
       <button class="ghost small" style="margin-top:6px" data-act="speechtest">🎙 ${tt('Test the speech check', 'تست بررسی گفتار')}</button>
       <div class="sptest" id="sptest"></div></div>
-    <label class="check"><input type="checkbox" id="skipOnGreen" ${t.skipOnGreen !== false ? 'checked' : ''}> ✅ ${tt('When a sentence turns green, go straight to the next one', 'وقتی جمله سبز شد، مستقیم برو جملهٔ بعد')}</label>
+    <div class="field"><span>✅ ${tt('When a sentence turns green', 'وقتی جمله سبز شد')}</span><select id="afterGreen">${[
+      ['shadow', tt('Skip the 2nd check, still shadow it (recommended)', 'تلاش دوم رد شود، ولی همزمان‌خوانی بماند (پیشنهادی)')],
+      ['next', tt('Go straight to the next sentence', 'مستقیم برو جملهٔ بعد')],
+      ['repeat', tt('Do every step anyway', 'همهٔ مراحل انجام شود')],
+    ].map(([v, label]) => `<option value="${v}" ${(t.afterGreen || (t.skipOnGreen === false ? 'repeat' : 'shadow')) === v ? 'selected' : ''}>${label}</option>`).join('')}</select></div>
     <label class="check"><input type="checkbox" id="warmup" ${t.warmup ? 'checked' : ''}> ${tt('Start each session by reviewing the last session', 'شروع هر جلسه با مرور جمله‌های جلسهٔ قبل')}</label>
     <p class="hint" id="lhint">${profileHint(t.level)}</p>
     <button class="ghost small danger" style="margin-top:12px" data-act="removelang">${tt(`Remove ${langName(l)}`, `حذف ${langName(l)}`)}</button>
@@ -118,7 +122,7 @@ export function onChange(ev) {
   if (id === 'level') { t.level = ev.target.value; save(); $('#lhint').textContent = profileHint(t.level); }
   if (id === 'voice') { t.voiceURI = ev.target.value; save(); }
   if (id === 'warmup') { t.warmup = ev.target.checked; save(); }
-  if (id === 'skipOnGreen') { t.skipOnGreen = ev.target.checked; save(); }
+  if (id === 'afterGreen') { t.afterGreen = ev.target.value; save(); }
   if (id === 'check') { t.check = ev.target.checked; save(); }
   if (id === 'checkReps') { t.checkReps = +ev.target.value; save(); }
 }

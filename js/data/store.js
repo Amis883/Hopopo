@@ -6,7 +6,7 @@ const LS_KEY = 'shadowing.v1';
 
 /** A learning track: one language with its own level, books, progress and history. */
 export function newTrack(lang, level = 'A1') {
-  const t = { lang, level, minutes: 12, speed: 1, voiceURI: '', warmup: true, check: true, checkReps: 2, skipOnGreen: true, bookId: null, books: {}, history: [] };
+  const t = { lang, level, minutes: 12, speed: 1, voiceURI: '', warmup: true, check: true, checkReps: 2, afterGreen: 'shadow', bookId: null, books: {}, history: [] };
   if (SAMPLES[lang]) {
     const id = 'sample-' + lang;
     t.books[id] = { title: SAMPLES[lang].title, pos: 0, total: 0, last: null, sample: true };

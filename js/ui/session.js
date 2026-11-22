@@ -149,8 +149,7 @@ async function runFrom(i) {
     if (!live(tok)) return;
     if (st.ph.t === 'check') {
       const green = await learnerTurn(st, c, tok); if (!live(tok)) return;
-      // a green sentence is done: skip its remaining repeats and go to the next sentence
-      if (green && track().skipOnGreen !== false) { R.i = nextChunkStart(R.plan.steps, R.i) - 1; }
+      if (green) R.i = afterGreen(R.i);
     }
     if (st.ph.t === 'echo') { await silentGap(c, st, tok); if (!live(tok)) return; }
     await wait(600, tok);
@@ -173,6 +172,21 @@ async function silentGap(c, st, tok) {
  * After 3 failed turns in a row the check is switched off for the rest of the session.
  */
 const GREEN = 85; // score at which a sentence counts as said correctly
+
+/**
+ * What happens after a green check (track setting `afterGreen`):
+ *  'shadow' (default) – skip the remaining checks of this sentence but still shadow it (speak along)
+ *  'next'             – skip everything left for this sentence
+ *  'repeat'           – skip nothing
+ * Returns the index of the last step to skip (the runner then advances by one).
+ */
+function greenMode() { const t = track(); return t.afterGreen || (t.skipOnGreen === false ? 'repeat' : 'shadow'); }
+function afterGreen(i) {
+  const steps = R.plan.steps, mode = greenMode();
+  if (mode === 'next') return nextChunkStart(steps, i) - 1;
+  if (mode === 'shadow') { const { k, sec } = steps[i]; while (steps[i + 1] && steps[i + 1].k === k && steps[i + 1].sec === sec && steps[i + 1].ph.t === 'check') i++; }
+  return i;
+}
 async function learnerTurn(st, c, tok) {
   if (R.noCheck) return silentGap(c, st, tok);
   const dur = voiceDur(c, st.ph.r), g = $('#gap'), gt = $('#gaptext'), hd = $('#heard');
@@ -207,7 +221,8 @@ async function learnerTurn(st, c, tok) {
   hd.innerHTML = `<span class="lbl">${tt('I heard: ', 'شنیدم: ')}</span><span class="txt">${esc(heard.text)}</span><span class="score" style="background:${col}">${num(res.score)}${tt('%', '٪')}</span>`;
   R.scores.push({ k: st.k, score: res.score });
   const green = res.score >= GREEN;
-  if (green && track().skipOnGreen !== false) hd.insertAdjacentHTML('beforeend', `<div class="lbl" style="margin-top:4px">✅ ${tt('Great — next sentence', 'عالی — جملهٔ بعد')}</div>`);
+  const mode = greenMode();
+  if (green && mode !== 'repeat') hd.insertAdjacentHTML('beforeend', `<div class="lbl" style="margin-top:4px">✅ ${mode === 'next' ? tt('Great — next sentence', 'عالی — جملهٔ بعد') : tt('Great — now speak along', 'عالی — حالا همزمان بخوان')}</div>`);
   await wait(green ? 1300 : 2800, tok);
   return green;
 }
