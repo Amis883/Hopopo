@@ -4,7 +4,7 @@ import { S, save, removeTrack } from '../data/store.js';
 import { getBook, deleteBook, forgetBooks } from '../data/books.js';
 import { voicesFor, voiceFor, onVoicesChanged, speak, unlockAudio, recognitionSupported, listenOnce, recognitionBlocked } from '../services/speech.js';
 import { tt, num, langName, getUI } from '../i18n.js';
-import { app, $, esc, toast, ui, isFramed } from './dom.js';
+import { app, $, esc, toast, ui, isFramed, confirmTap as confirmed } from './dom.js';
 import { importPanel } from './importFlow.js';
 import { renderHome } from './home.js';
 
@@ -51,6 +51,7 @@ export async function renderTrack(l) {
       <div class="msg">${speechNote}</div>
       <button class="ghost small" style="margin-top:6px" data-act="speechtest">🎙 ${tt('Test the speech check', 'تست بررسی گفتار')}</button>
       <div class="sptest" id="sptest"></div></div>
+    <label class="check"><input type="checkbox" id="skipOnGreen" ${t.skipOnGreen !== false ? 'checked' : ''}> ✅ ${tt('When a sentence turns green, go straight to the next one', 'وقتی جمله سبز شد، مستقیم برو جملهٔ بعد')}</label>
     <label class="check"><input type="checkbox" id="warmup" ${t.warmup ? 'checked' : ''}> ${tt('Start each session by reviewing the last session', 'شروع هر جلسه با مرور جمله‌های جلسهٔ قبل')}</label>
     <p class="hint" id="lhint">${profileHint(t.level)}</p>
     <button class="ghost small danger" style="margin-top:12px" data-act="removelang">${tt(`Remove ${langName(l)}`, `حذف ${langName(l)}`)}</button>
@@ -79,14 +80,6 @@ function setPos(i) {
   const t = S.tracks[ui.lang], m = t.books[t.bookId]; if (!m) return;
   m.pos = Math.max(0, Math.min(i, (m.total || 1) - 1)); m.last = null; save();
   toast(tt('✓ Starting point set', '✓ نقطهٔ شروع تنظیم شد')); renderTrack(ui.lang);
-}
-
-/** Two-tap confirm on destructive buttons. */
-function confirmed(el, label) {
-  if (el.classList.contains('confirm')) return true;
-  const old = el.textContent; el.classList.add('confirm'); el.textContent = label;
-  setTimeout(() => { if (el.isConnected) { el.classList.remove('confirm'); el.textContent = old; } }, 3000);
-  return false;
 }
 
 export const actions = {
@@ -125,6 +118,7 @@ export function onChange(ev) {
   if (id === 'level') { t.level = ev.target.value; save(); $('#lhint').textContent = profileHint(t.level); }
   if (id === 'voice') { t.voiceURI = ev.target.value; save(); }
   if (id === 'warmup') { t.warmup = ev.target.checked; save(); }
+  if (id === 'skipOnGreen') { t.skipOnGreen = ev.target.checked; save(); }
   if (id === 'check') { t.check = ev.target.checked; save(); }
   if (id === 'checkReps') { t.checkReps = +ev.target.value; save(); }
 }

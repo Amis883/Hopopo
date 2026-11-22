@@ -1,9 +1,10 @@
 // Home screen: one card per language track, "add a language", install hint.
 import { CATALOG, LEVELS, lang as langInfo, trackColor } from '../core/languages.js';
 import { stats } from '../core/stats.js';
-import { S, save, addTrack } from '../data/store.js';
+import { S, save, addTrack, removeTrack } from '../data/store.js';
+import { forgetBooks } from '../data/books.js';
 import { tt, num, locale, langName, weekdays, getUI, setUI } from '../i18n.js';
-import { app, esc, ui, isFramed, isStandalone, toast } from './dom.js';
+import { app, esc, ui, isFramed, isStandalone, toast, confirmTap } from './dom.js';
 import { renderTrack } from './track.js';
 
 export function renderHome() {
@@ -34,7 +35,7 @@ function trackCard(l, index) {
   const sub = (L.native !== langName(l) ? L.native + ' – ' : '') + tt('Level', 'سطح') + ' ' + t.level;
   return `<section class="card track" style="--acc:${trackColor(l, index)}">
     <div class="trow"><div class="lang"><span class="code">${l.toUpperCase()}</span><div><b>${langName(l)}</b><small>${esc(sub)}</small></div></div>
-    <div class="streak" title="${tt('Days in a row', 'روزهای پشت‌سرهم')}">🔥 ${num(st.streak)}</div></div>
+    <div class="trow"><div class="streak" title="${tt('Days in a row', 'روزهای پشت‌سرهم')}">🔥 ${num(st.streak)}</div><button class="icon del" style="margin-inline-start:8px" data-act="removetrack" data-lang="${l}" aria-label="${tt('Remove language', 'حذف زبان')}">🗑</button></div></div>
     <div class="book">📖 <bdi>${esc(b ? b.title : tt('No book yet — add one in “Book & settings”', 'هنوز کتابی نیست — از «کتاب و تنظیمات» اضافه کن'))}</bdi></div>
     <div class="bar"><i style="width:${pct}%"></i></div>
     <div class="meta"><span>${tt(`${num(pct)}% of book`, `${num(pct)}٪ از کتاب`)}</span><span>${st.doneToday ? tt('✓ Done today', '✓ امروز انجام شد') : st.todaySec ? tt(`${num(Math.round(st.todaySec / 60))} min today`, `امروز ${num(Math.round(st.todaySec / 60))} دقیقه`) : tt('Not yet today', 'امروز هنوز نه')}</span></div>
@@ -66,6 +67,13 @@ export const actions = {
   home: () => renderHome(),
   track: el => renderTrack(el.dataset.lang),
   uilang: () => { setUI(getUI() === 'fa' ? 'en' : 'fa'); S.ui = getUI(); save(); renderHome(); },
+  removetrack: el => {
+    const l = el.dataset.lang;
+    if (!confirmTap(el, tt(`Remove ${langName(l)}?`, `حذف ${langName(l)}؟`))) return;
+    forgetBooks(removeTrack(l));
+    toast(tt(`${langName(l)} removed`, `${langName(l)} حذف شد`));
+    renderHome();
+  },
   install: () => { if (ui.deferredInstall) { ui.deferredInstall.prompt(); ui.deferredInstall = null; } },
   addlang: () => {
     const l = document.getElementById('newlang').value, level = document.getElementById('newlevel').value;

@@ -147,7 +147,11 @@ async function runFrom(i) {
     await voice(c, st.ph.r);
     clearHl();
     if (!live(tok)) return;
-    if (st.ph.t === 'check') { await learnerTurn(st, c, tok); if (!live(tok)) return; }
+    if (st.ph.t === 'check') {
+      const green = await learnerTurn(st, c, tok); if (!live(tok)) return;
+      // a green sentence is done: skip its remaining repeats and go to the next sentence
+      if (green && track().skipOnGreen !== false) { R.i = nextChunkStart(R.plan.steps, R.i) - 1; }
+    }
     if (st.ph.t === 'echo') { await silentGap(c, st, tok); if (!live(tok)) return; }
     await wait(600, tok);
     if (!live(tok)) return;
@@ -168,6 +172,7 @@ async function silentGap(c, st, tok) {
  * phones often fail to pick up speech, and marking the learner wrong for that is discouraging and wrong.
  * After 3 failed turns in a row the check is switched off for the rest of the session.
  */
+const GREEN = 85; // score at which a sentence counts as said correctly
 async function learnerTurn(st, c, tok) {
   if (R.noCheck) return silentGap(c, st, tok);
   const dur = voiceDur(c, st.ph.r), g = $('#gap'), gt = $('#gaptext'), hd = $('#heard');
@@ -198,10 +203,13 @@ async function learnerTurn(st, c, tok) {
   R.srFails = 0;
   const res = scoreSpeech(c.text, heard.text, R.lang);
   showMarks(res.marks, c.text);
-  const col = res.score >= 85 ? 'var(--ok)' : res.score >= 60 ? 'var(--de)' : 'var(--danger)';
+  const col = res.score >= GREEN ? 'var(--ok)' : res.score >= 60 ? 'var(--de)' : 'var(--danger)';
   hd.innerHTML = `<span class="lbl">${tt('I heard: ', 'شنیدم: ')}</span><span class="txt">${esc(heard.text)}</span><span class="score" style="background:${col}">${num(res.score)}${tt('%', '٪')}</span>`;
   R.scores.push({ k: st.k, score: res.score });
-  await wait(res.score >= 85 ? 1600 : 2800, tok);
+  const green = res.score >= GREEN;
+  if (green && track().skipOnGreen !== false) hd.insertAdjacentHTML('beforeend', `<div class="lbl" style="margin-top:4px">✅ ${tt('Great — next sentence', 'عالی — جملهٔ بعد')}</div>`);
+  await wait(green ? 1300 : 2800, tok);
+  return green;
 }
 
 /** Stops everything that makes sound or listens. Never throws: leaving a session must always work. */

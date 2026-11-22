@@ -18,6 +18,14 @@ export const isFramed = (() => { try { return window.self !== window.top; } catc
 export const isStandalone = () => (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
 
 /** Which screen is showing and which language track it is about. */
+/** Two-tap confirm for destructive buttons: the first tap arms it (for 3 s), the second returns true. */
+export function confirmTap(el, label) {
+  if (el.classList.contains('confirm')) return true;
+  const old = el.innerHTML; el.classList.add('confirm'); el.textContent = label;
+  setTimeout(() => { if (el.isConnected) { el.classList.remove('confirm'); el.innerHTML = old; } }, 3000);
+  return false;
+}
+
 export const ui = { view: 'home', lang: null, deferredInstall: null };
 
 const pad = n => String(n).padStart(2, '0');
