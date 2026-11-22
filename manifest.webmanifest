@@ -1,7 +1,7 @@
 {
   "name": "Hopopo — Daily shadowing",
   "short_name": "Hopopo",
-  "description": "Daily shadowing practice for English and German from your own textbook",
+  "description": "Daily shadowing practice for any language, from your own textbook",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

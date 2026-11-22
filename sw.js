@@ -1,7 +1,15 @@
-const CACHE = 'hopopo-v2';
-const ASSETS = ['./', './index.html', './manifest.webmanifest', './icons/icon.svg',
-  './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
-self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS))); self.skipWaiting(); });
+// Offline support. App shell is pre-cached; everything else (OCR engine, language data, fonts)
+// is cached on first use. Pages are network-first so new versions arrive; assets are cache-first.
+const CACHE = 'hopopo-v3';
+const SHELL = ['./', './index.html', './manifest.webmanifest', './css/app.css',
+  './js/main.js', './js/i18n.js',
+  './js/core/languages.js', './js/core/text.js', './js/core/planner.js', './js/core/scoring.js', './js/core/stats.js', './js/core/packs.js',
+  './js/data/store.js', './js/data/books.js',
+  './js/services/speech.js', './js/services/importers.js', './js/services/ocr.js', './js/services/claude.js',
+  './js/ui/dom.js', './js/ui/home.js', './js/ui/track.js', './js/ui/importFlow.js', './js/ui/session.js',
+  './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
+
+self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL))); self.skipWaiting(); });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))));
   self.clients.claim();
@@ -9,11 +17,12 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const req = e.request; if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  const cacheable = url.origin === location.origin || /cdnjs\.cloudflare\.com|fonts\.(googleapis|gstatic)\.com/.test(url.host);
+  const cacheable = url.origin === location.origin || /cdn\.jsdelivr\.net|fonts\.(googleapis|gstatic)\.com/.test(url.host);
   if (!cacheable) return;
-  if (req.mode === 'navigate') {   // network first for the page, so updates arrive
-    e.respondWith(fetch(req).then(r => { const c = r.clone(); caches.open(CACHE).then(x => x.put('./index.html', c)); return r; })
-      .catch(() => caches.match('./index.html')));
+  const fresh = req.mode === 'navigate' || (url.origin === location.origin && /\.(js|css|html)$/.test(url.pathname) && !/\/(ocr|lib)\//.test(url.pathname));
+  if (fresh) {   // network first: code updates arrive, cache is the offline fallback
+    e.respondWith(fetch(req).then(r => { const c = r.clone(); caches.open(CACHE).then(x => x.put(req, c)); return r; })
+      .catch(() => caches.match(req).then(hit => hit || caches.match('./index.html'))));
     return;
   }
   e.respondWith(caches.match(req).then(hit => hit || fetch(req).then(r => {
