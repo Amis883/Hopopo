@@ -6,6 +6,7 @@ import { forgetBooks } from '../data/books.js';
 import { tt, num, locale, langName, weekdays, getUI, setUI } from '../i18n.js';
 import { app, esc, ui, isFramed, isStandalone, toast, confirmTap } from './dom.js';
 import { renderTrack } from './track.js';
+import { VERSION } from '../version.js';
 
 export function renderHome() {
   if (ui.pendingReload) { location.reload(); return; }   // an update arrived during the session
@@ -21,11 +22,13 @@ export function renderHome() {
   showVersion();
 }
 
-/** The installed version = the service worker's cache name (sw.js is the single source of truth). */
+/** Shows the running code's version, and notes when a newer service worker is still being applied. */
 async function showVersion() {
   try {
+    const el = document.getElementById('ver'); if (!el) return;
+    el.textContent = 'v' + VERSION;      // the code that is running
     const v = (await caches.keys()).find(k => k.startsWith('hopopo-'));
-    const el = document.getElementById('ver'); if (v && el) el.textContent = 'v' + v.slice(7);
+    if (v && v.slice(7) !== VERSION) el.textContent += ' · ' + tt('updating…', 'در حال به‌روزرسانی…');
   } catch (e) { /* caches unavailable (e.g. embedded preview) */ }
 }
 
