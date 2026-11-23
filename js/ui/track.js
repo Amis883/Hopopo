@@ -51,6 +51,10 @@ export async function renderTrack(l) {
       <div class="msg">${speechNote}</div>
       <button class="ghost small" style="margin-top:6px" data-act="speechtest">🎙 ${tt('Test the speech check', 'تست بررسی گفتار')}</button>
       <div class="sptest" id="sptest"></div></div>
+    <div class="field"><span>🎙 ${tt('How to answer', 'نحوهٔ جواب دادن')}</span><select id="micMode">${[
+      ['tap', tt('Tap 🎙, then speak (best on iPhone)', 'بزن 🎙 و بعد بگو (بهترین برای آیفون)')],
+      ['auto', tt('Listen automatically after each sentence', 'بعد از هر جمله خودکار گوش بده')],
+    ].map(([v, label]) => `<option value="${v}" ${(t.micMode || (/iPad|iPhone|iPod/.test(navigator.userAgent) ? 'tap' : 'auto')) === v ? 'selected' : ''}>${label}</option>`).join('')}</select></div>
     <div class="field"><span>✅ ${tt('When a sentence turns green', 'وقتی جمله سبز شد')}</span><select id="afterGreen">${[
       ['shadow', tt('Skip the 2nd check, still shadow it (recommended)', 'تلاش دوم رد شود، ولی همزمان‌خوانی بماند (پیشنهادی)')],
       ['next', tt('Go straight to the next sentence', 'مستقیم برو جملهٔ بعد')],
@@ -102,9 +106,11 @@ export const actions = {
     unlockAudio();
     out.innerHTML = `${tt('Say:', 'بگو:')} <b dir="auto">${esc(sample)}</b><br>🎙 ${tt('Listening…', 'در حال گوش دادن…')}`;
     const r = await listenOnce(l, 9000, () => false, t => { out.innerHTML = `${tt('Say:', 'بگو:')} <b dir="auto">${esc(sample)}</b><br>🎙 ${esc(t)}`; });
+    const diag = `<div class="sub" style="font-size:.78rem;margin-top:4px" dir="ltr">SR:${recognitionSupported() ? 'yes' : 'no'} · app:${(window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone ? 'installed' : 'browser'} · ${esc(navigator.userAgent.replace(/^.*?\(([^)]*)\).*$/, '$1').slice(0, 60))}</div>`;
     if (r === null) out.textContent = recognitionBlocked() ? tt('❌ The microphone or speech recognition is not allowed. Check the browser\'s microphone permission (iPhone: also turn on Siri & Dictation).', '❌ اجازهٔ میکروفون یا تشخیص گفتار داده نشده. اجازهٔ میکروفون مرورگر را بررسی کن (آیفون: Siri و Dictation را هم روشن کن).') : tt('❌ This browser has no speech recognition. Use Chrome (Android) or Safari (iPhone).', '❌ این مرورگر تشخیص گفتار ندارد. Chrome (اندروید) یا Safari (آیفون) را امتحان کن.');
     else if (r.text) out.innerHTML = `✅ ${tt('Heard:', 'شنیدم:')} <b dir="auto">${esc(r.text)}</b>`;
     else out.textContent = r.error ? tt(`❌ Error: ${r.error}. Close other apps using the microphone and try again.`, `❌ خطا: ${r.error}. برنامه‌های دیگری که از میکروفون استفاده می‌کنند را ببند و دوباره امتحان کن.`) : tt('⚠ Heard nothing. Speak louder, closer to the phone, right after tapping.', '⚠ چیزی نشنیدم. بلندتر و نزدیک‌تر به گوشی، بلافاصله بعد از زدن دکمه بگو.');
+    out.insertAdjacentHTML('beforeend', diag);
   },
   testvoice: () => { unlockAudio(); const t = S.tracks[ui.lang]; speak(langInfo(ui.lang).hello, t.speed, t); },
 };
@@ -122,6 +128,7 @@ export function onChange(ev) {
   if (id === 'level') { t.level = ev.target.value; save(); $('#lhint').textContent = profileHint(t.level); }
   if (id === 'voice') { t.voiceURI = ev.target.value; save(); }
   if (id === 'warmup') { t.warmup = ev.target.checked; save(); }
+  if (id === 'micMode') { t.micMode = ev.target.value; save(); }
   if (id === 'afterGreen') { t.afterGreen = ev.target.value; save(); }
   if (id === 'check') { t.check = ev.target.checked; save(); }
   if (id === 'checkReps') { t.checkReps = +ev.target.value; save(); }

@@ -1,7 +1,7 @@
 // Offline support. App shell is pre-cached; everything else (OCR engine, language data, fonts)
 // is cached on first use. Pages are network-first so new versions arrive; assets are cache-first.
 // RELEASE: bump VERSION on every deploy. A changed sw.js is how installed apps learn there is an update.
-const VERSION = '2.4.0';
+const VERSION = '2.5.0';
 const CACHE = 'hopopo-' + VERSION;
 const SHELL = ['./', './index.html', './manifest.webmanifest', './css/app.css',
   './js/main.js', './js/i18n.js',

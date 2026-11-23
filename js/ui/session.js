@@ -49,6 +49,7 @@ function render() {
     <div class="textcard ${/A/.test(t.level) ? 'lvl-a' : ''}" id="textcard" dir="${isRtl(R.lang) ? 'rtl' : 'ltr'}" lang="${L.tts}" style="text-align:start"></div>
     <div class="trans" id="trans" dir="auto"></div>
     <div class="heard" id="heard"></div>
+    <div class="micbox hidden" id="micbox"><button class="play micbtn" data-act="micgo" aria-label="Speak">🎙</button><div class="miclbl">${tt('Tap and say it', 'بزن و بگو')}</div><button class="chip" data-act="micskip">${tt('Skip', 'رد کن')}</button></div>
     <div class="gap" id="gap"><div class="gapbar"><i id="gapfill"></i></div><span id="gaptext">${tt('Your turn — repeat it aloud', 'نوبت توئه — بلند تکرار کن')}</span></div>
     <div class="controls" dir="ltr">
       <button class="icon big" data-act="prev" aria-label="Previous">⏮</button>
@@ -187,19 +188,51 @@ function afterGreen(i) {
   if (mode === 'shadow') { const { k, sec } = steps[i]; while (steps[i + 1] && steps[i + 1].k === k && steps[i + 1].sec === sec && steps[i + 1].ph.t === 'check') i++; }
   return i;
 }
+/** iPhone/iPad: Safari only opens the microphone for speech recognition from a tap. */
+const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+/** 'tap' = learner taps 🎙 to answer (needed on iOS); 'auto' = listen right after the sentence. */
+const micMode = () => R.forceTap ? 'tap' : (track().micMode || (isIOS() ? 'tap' : 'auto'));
+
+/**
+ * Tap mode: show a big 🎙 button and wait. The tap handler (actions.micgo) starts recognition
+ * synchronously inside the tap, which is what iOS requires; it hands the listening promise back here.
+ * Resolves with the listen result, or 'skip' / 'timeout'.
+ */
+function waitForTap(maxMs, tok, onLive, waitMs) {
+  return new Promise(res => {
+    let done = false;
+    const end = v => { if (done) return; done = true; clearTimeout(to); clearInterval(watch); R.micWait = null; res(v); };
+    const to = setTimeout(() => end('timeout'), waitMs);
+    const watch = setInterval(() => { if (!live(tok)) end('cancel'); }, 100);
+    R.micWait = { start: () => { clearTimeout(to); listenOnce(R.lang, maxMs, () => !live(tok), onLive).then(end); }, skip: () => end('skip') };
+  });
+}
+
 async function learnerTurn(st, c, tok) {
   if (R.noCheck) return silentGap(c, st, tok);
-  const dur = voiceDur(c, st.ph.r), g = $('#gap'), gt = $('#gaptext'), hd = $('#heard');
-  await wait(300, tok); if (!live(tok)) return;   // let the speaker audio release before the mic opens (iOS)
-  gt.textContent = tt('🎙 Now say it… I\'m listening', '🎙 حالا بگو… گوش می‌دهم'); gt.classList.add('listening'); $('#gapfill').style.width = '100%'; g.classList.add('on');
-  const heard = await listenOnce(R.lang, (dur * 1.8 + 5) * 1000, () => !live(tok), t => { hd.innerHTML = `<span class="lbl">${tt('I heard: ', 'شنیدم: ')}</span><span class="txt">${esc(t)}</span>`; });
-  g.classList.remove('on'); gt.classList.remove('listening'); gt.textContent = tt('Your turn — repeat it aloud', 'نوبت توئه — بلند تکرار کن');
-  if (!live(tok)) return;
+  const dur = voiceDur(c, st.ph.r), g = $('#gap'), gt = $('#gaptext'), hd = $('#heard'), mic = $('#micbox');
+  const onLive = t => { hd.innerHTML = `<span class="lbl">${tt('I heard: ', 'شنیدم: ')}</span><span class="txt">${esc(t)}</span>`; };
+  const maxMs = (dur * 1.8 + 5) * 1000;
+  let heard;
+  if (micMode() === 'tap') {
+    mic.classList.remove('hidden');
+    const r = await waitForTap(maxMs, tok, t => { mic.querySelector('.miclbl').textContent = tt('Listening…', 'در حال گوش دادن…'); onLive(t); }, (dur * 3 + 12) * 1000);
+    mic.classList.add('hidden'); mic.querySelector('.miclbl').textContent = tt('Tap and say it', 'بزن و بگو');
+    if (!live(tok) || r === 'cancel') return;
+    if (r === 'skip' || r === 'timeout') { hd.innerHTML = `<span class="lbl">${tt('Skipped', 'رد شد')}</span>`; await wait(500, tok); return; }
+    heard = r;
+  } else {
+    await wait(300, tok); if (!live(tok)) return;   // let the speaker audio release before the mic opens
+    gt.textContent = tt('🎙 Now say it… I\'m listening', '🎙 حالا بگو… گوش می‌دهم'); gt.classList.add('listening'); $('#gapfill').style.width = '100%'; g.classList.add('on');
+    heard = await listenOnce(R.lang, maxMs, () => !live(tok), onLive);
+    g.classList.remove('on'); gt.classList.remove('listening'); gt.textContent = tt('Your turn — repeat it aloud', 'نوبت توئه — بلند تکرار کن');
+    if (!live(tok)) return;
+  }
   if (heard === null) {
     R.noCheck = true;
-    toast(recognitionBlocked() ? tt('Microphone permission was denied; continuing with repeat pauses.', 'اجازهٔ میکروفون داده نشد؛ با مکث برای تکرار ادامه می‌دهیم.')
+    toast(recognitionBlocked() ? tt('Microphone or speech recognition is not allowed. iPhone: Settings → Siri → turn on Siri & Dictation, and allow the microphone for Safari. Continuing with repeat pauses.', 'میکروفون یا تشخیص گفتار اجازه ندارد. آیفون: Settings ← Siri ← Siri & Dictation را روشن کن و اجازهٔ میکروفون Safari را بده. با مکث برای تکرار ادامه می‌دهیم.')
       : isFramed ? tt('The speech check only works in the installed app; here you just get a pause to repeat.', 'بررسی گفتار فقط در نسخهٔ نصب‌شدهٔ اپ کار می‌کند؛ اینجا فقط فرصت تکرار داری.')
-      : tt('This browser has no speech recognition; continuing with repeat pauses.', 'این مرورگر تشخیص گفتار ندارد؛ با مکث برای تکرار ادامه می‌دهیم.'), 5500);
+      : tt('This browser has no speech recognition; continuing with repeat pauses.', 'این مرورگر تشخیص گفتار ندارد؛ با مکث برای تکرار ادامه می‌دهیم.'), 8000);
     return silentGap(c, st, tok);
   }
   if (!heard.text) {
@@ -207,7 +240,11 @@ async function learnerTurn(st, c, tok) {
     hd.innerHTML = `<span class="lbl">${heard.error
       ? tt(`The phone couldn't listen (${esc(heard.error)}).`, `گوشی نتوانست گوش بدهد (${esc(heard.error)}).`)
       : tt('I didn\'t catch that — no problem, keep going.', 'صدایت را نگرفتم — اشکالی ندارد، ادامه بده.')}</span>`;
-    if (R.srFails >= 3) {
+    if (micMode() === 'auto' && R.srFails >= 2) {
+      // automatic listening isn't working on this phone: switch to tap-to-speak instead of giving up
+      R.forceTap = true; R.srFails = 0;
+      toast(tt('Switching to tap-to-speak: after each sentence, tap 🎙 and say it.', 'حالت «بزن و بگو» فعال شد: بعد از هر جمله 🎙 را بزن و بگو.'), 6000);
+    } else if (R.srFails >= 3) {
       R.noCheck = true;
       toast(tt('Speech check isn\'t picking you up on this phone, so it\'s off for this session. Try "Test the speech check" in Book & settings.', 'بررسی گفتار روی این گوشی صدایت را نمی‌گیرد، برای همین در این جلسه خاموش شد. در «کتاب و تنظیمات» دکمهٔ «تست بررسی گفتار» را امتحان کن.'), 7000);
     }
@@ -364,6 +401,8 @@ export const actions = {
   next: () => { const i = nextChunkStart(R.plan.steps, R.i); stopAudio(); if (i >= R.plan.steps.length) { R.i = i; finish(); } else runFrom(i); },
   prev: () => { let s = chunkStart(R.plan.steps, R.i); if (R.i === s && s > 0) s = chunkStart(R.plan.steps, s - 1); stopAudio(); runFrom(s); },
   toggletext: () => { R.showText = !R.showText; update(); },
+  micgo: () => { if (R && R.micWait) R.micWait.start(); },   // must start recognition inside the tap (iOS)
+  micskip: () => { if (R && R.micWait) R.micWait.skip(); },
   rec: () => toggleRec(),
   playrec: () => playRec(),
   closelookup: () => $('#lookup').classList.add('hidden'),

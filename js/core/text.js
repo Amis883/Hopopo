@@ -9,6 +9,9 @@ export function wc(s, lang) {
   return s.split(/\s+/).filter(Boolean).length;
 }
 
+/** Removes stray 1-character tokens OCR leaves after a sentence end: "…Berlin. a b c" → "…Berlin." */
+export const stripTrailingNoise = l => l.replace(/([.!?…:;"”»)。！？])(?:\s+\S){1,8}\s*$/u, '$1');
+
 /**
  * Cleans extracted text (PDF/OCR/EPUB/paste) into paragraphs:
  * joins hyphenated line breaks, drops page numbers and short heading-like lines.
@@ -18,7 +21,7 @@ export function normalize(raw, lang) {
   const paras = []; let cur = [];
   const flush = () => { if (cur.length) paras.push(cur.join(isNoSpace(lang) ? '' : ' ')); cur = []; };
   for (const line of t.split('\n')) {
-    const l = line.replace(/\s+/g, ' ').trim();
+    const l = stripTrailingNoise(line.replace(/\s+/g, ' ').trim());
     if (!l) { flush(); continue; }
     if (/^[\dIVXLCivxlc.\-–—\s]+$/.test(l)) continue;                // page numbers
     if (wc(l, lang) <= 5 && !TERMINAL.test(l)) { flush(); continue; } // headings / labels
@@ -35,9 +38,42 @@ export function splitSentences(paras, lang) {
   for (const p of paras) {
     const parts = seg ? [...seg.segment(p)].map(x => x.segment)
       : (p.match(/[^.!?…。！？]+[.!?…。！？]+["'»«“”)」』]*\s*|[^.!?…。！？]+$/g) || [p]);
-    for (const s of parts) { const x = s.trim(); if (x && /\p{L}/u.test(x)) out.push(x); }
+    for (const s of parts) { const x = cleanSentence(s, lang); if (x && !isGarbage(x, lang)) out.push(x); }
   }
   return out;
+}
+
+/** Valid one-letter words in the supported languages (so "Il y a…", "Idę z mamą", "Я и ты" survive the filter). */
+const ONE_LETTER = new Set(['a', 'i', 'o', 'e', 'y', 'u', 'à', 'è', 'é', 'ó', 'w', 'z', 'и', 'в', 'с', 'к', 'у', 'о', 'а', 'я', 'ο', 'η', 'ή', 'ό']);
+const VOWEL = /[aeiouyäöüàâáéèêëíîïóôòõúùûåøæœ]/i;
+const LATIN_WORD = /^[a-zA-ZÀ-ɏ]+$/;
+
+/** Strips list markers OCR leaves at the start of a line: "a) ", "(b) ", "3. ", "• ". */
+export function cleanSentence(s, lang) {
+  let x = stripTrailingNoise(s.trim());
+  if (isNoSpace(lang)) return x;
+  for (let i = 0; i < 3; i++) x = x.replace(/^(?:\(?\p{L}\)\s+|\p{L}[.:]\s+(?=\p{Lu})|\d{1,3}\s*[).:]?\s+|[•●▪·*|\-–]\s*)/u, '');
+  return x.trim();
+}
+
+/**
+ * True for OCR noise that is not a real sentence: stray letters ("a b c", "I l |"),
+ * symbols and digits, or consonant soup ("Lktn hkvz"). Short real sentences ("Ja.", "Hallo!") pass.
+ */
+export function isGarbage(s, lang) {
+  const letters = (s.match(/\p{L}/gu) || []).length;
+  if (isNoSpace(lang)) return letters < 2;
+  const chars = s.replace(/\s/g, '').length;
+  if (!letters || letters / chars < 0.6) return true;
+  const words = s.split(/\s+/).map(t => t.replace(/^[^\p{L}]+|[^\p{L}]+$/gu, '')).filter(Boolean);
+  if (!words.length) return true;
+  if (words.length === 1) return words[0].length < 2 || (words[0].length < 3 && !/[.!?]["”»)]?$/.test(s.trim()));
+  const stray = words.filter(w => w.length === 1 && !ONE_LETTER.has(w.toLowerCase())).length;
+  if (stray / words.length > 0.3) return true;
+  if (!words.some(w => w.length >= 2 && !(w.length === 1))) return true;
+  if (words.every(w => w.length === 1)) return true;
+  const soup = words.filter(w => w.length >= 4 && LATIN_WORD.test(w) && !VOWEL.test(w)).length;
+  return soup / words.length > 0.3;
 }
 
 export const textToSentences = (raw, lang) => splitSentences(normalize(raw, lang), lang);
