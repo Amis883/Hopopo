@@ -177,3 +177,4 @@ details.help[open] summary::after{content:"–"}
 .micbox{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:12px}
 .micbox .miclbl{font-weight:700;color:var(--acc)}
 .micbtn{width:64px;height:64px;font-size:1.6rem}
+.micbtn.recording{background:var(--danger);animation:pulse 1s infinite}

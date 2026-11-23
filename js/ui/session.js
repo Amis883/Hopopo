@@ -5,7 +5,7 @@ import { scoreSpeech, tokens } from '../core/scoring.js';
 import { dayKey, stats } from '../core/stats.js';
 import { S, save } from '../data/store.js';
 import { getBook } from '../data/books.js';
-import { speak, stopSpeaking, unlockAudio, listenOnce, recognitionBlocked, stopListening } from '../services/speech.js';
+import { speak, stopSpeaking, unlockAudio, listenOnce, recognitionBlocked, stopListening, recognitionSupported } from '../services/speech.js';
 import { unlockClips, useAudio, playClip, stopClip } from '../services/audioclip.js';
 import { PROFILES } from '../core/languages.js';
 import { tt, num, langName, phaseText, weekdays, getUI } from '../i18n.js';
@@ -204,7 +204,11 @@ function waitForTap(maxMs, tok, onLive, waitMs) {
     const end = v => { if (done) return; done = true; clearTimeout(to); clearInterval(watch); R.micWait = null; res(v); };
     const to = setTimeout(() => end('timeout'), waitMs);
     const watch = setInterval(() => { if (!live(tok)) end('cancel'); }, 100);
-    R.micWait = { start: () => { clearTimeout(to); listenOnce(R.lang, maxMs, () => !live(tok), onLive).then(end); }, skip: () => end('skip') };
+    R.micWait = {
+      listening: false,
+      start: () => { clearTimeout(to); R.micWait.listening = true; listenOnce(R.lang, maxMs, () => !live(tok), onLive).then(end); },
+      skip: () => { if (R.micWait && R.micWait.listening) stopListening(); end('skip'); },
+    };
   });
 }
 
@@ -214,10 +218,12 @@ async function learnerTurn(st, c, tok) {
   const onLive = t => { hd.innerHTML = `<span class="lbl">${tt('I heard: ', 'شنیدم: ')}</span><span class="txt">${esc(t)}</span>`; };
   const maxMs = (dur * 1.8 + 5) * 1000;
   let heard;
-  if (micMode() === 'tap') {
+  if (!recognitionSupported() || recognitionBlocked()) heard = null;      // no recognition here: don't show a dead button
+  else if (micMode() === 'tap') {
     mic.classList.remove('hidden');
     const r = await waitForTap(maxMs, tok, t => { mic.querySelector('.miclbl').textContent = tt('Listening…', 'در حال گوش دادن…'); onLive(t); }, (dur * 3 + 12) * 1000);
     mic.classList.add('hidden'); mic.querySelector('.miclbl').textContent = tt('Tap and say it', 'بزن و بگو');
+    const btn = mic.querySelector('.micbtn'); btn.classList.remove('recording'); btn.textContent = '🎙';
     if (!live(tok) || r === 'cancel') return;
     if (r === 'skip' || r === 'timeout') { hd.innerHTML = `<span class="lbl">${tt('Skipped', 'رد شد')}</span>`; await wait(500, tok); return; }
     heard = r;
@@ -401,7 +407,13 @@ export const actions = {
   next: () => { const i = nextChunkStart(R.plan.steps, R.i); stopAudio(); if (i >= R.plan.steps.length) { R.i = i; finish(); } else runFrom(i); },
   prev: () => { let s = chunkStart(R.plan.steps, R.i); if (R.i === s && s > 0) s = chunkStart(R.plan.steps, s - 1); stopAudio(); runFrom(s); },
   toggletext: () => { R.showText = !R.showText; update(); },
-  micgo: () => { if (R && R.micWait) R.micWait.start(); },   // must start recognition inside the tap (iOS)
+  micgo: el => {
+    if (!R || !R.micWait) return;
+    if (R.micWait.listening) { stopListening(); return; }        // second tap = "I'm done"
+    R.micWait.start();                                           // must start inside the tap (iOS)
+    el.classList.add('recording'); el.textContent = '⏹';
+    const lbl = $('#micbox .miclbl'); if (lbl) lbl.textContent = tt('🔴 Listening… speak now, tap ⏹ when done', '🔴 در حال گوش دادن… حالا بگو، تمام شد ⏹ را بزن');
+  },
   micskip: () => { if (R && R.micWait) R.micWait.skip(); },
   rec: () => toggleRec(),
   playrec: () => playRec(),
