@@ -1,7 +1,7 @@
 // The practice session: a step runner over the plan, with speech, the learner's turn, and scoring.
-import { lang as langInfo, isRtl, trackColor } from '../core/languages.js';
+import { lang as langInfo, isRtl, trackColor, isNoSpace } from '../core/languages.js';
 import { buildPlan, estDur, chunkStart, nextChunkStart, styleOf } from '../core/planner.js';
-import { scoreSpeech, tokens } from '../core/scoring.js';
+import { scoreSpeech, scorePartial, tokens } from '../core/scoring.js';
 import { dayKey, stats } from '../core/stats.js';
 import { S, save } from '../data/store.js';
 import { getBook } from '../data/books.js';
@@ -9,7 +9,7 @@ import { speak, stopSpeaking, unlockAudio, listenOnce, recognitionBlocked, stopL
 import { unlockClips, useAudio, playClip, stopClip } from '../services/audioclip.js';
 import { engineFor } from '../services/engine.js';
 import { primeAudio, requestMic, recordUtterance, micSupported } from '../services/mic.js';
-import { loadWhisper, transcribe, whisperState } from '../services/whisper.js';
+import { loadWhisper, transcribe, whisperState, whisperSpeedMs } from '../services/whisper.js';
 import { PROFILES } from '../core/languages.js';
 import { tt, num, langName, phaseText, weekdays, getUI } from '../i18n.js';
 import { app, $, esc, toast, ui, isFramed, mmss } from './dom.js';
@@ -138,6 +138,18 @@ function showMarks(marks, text) {
   let k = 0; const rank = { ok: 0, close: 1, bad: 2 };
   ws.forEach(s => { const n = tokens(s.textContent, R.lang).length; const part = marks.slice(k, k + n); k += n; const worst = part.reduce((a, x) => rank[x] > rank[a] ? x : a, 'ok'); s.classList.remove('ok', 'close', 'bad'); s.classList.add(worst); });
 }
+/** While the learner speaks: colour the words said so far and highlight the next one. */
+function showLive(c, heardSoFar) {
+  if (isNoSpace(R.lang)) return;
+  const { marks, pos } = scorePartial(c.text, heardSoFar, R.lang);
+  spans().forEach((s, i) => { s.classList.remove('ok', 'close', 'bad', 'hl'); if (marks[i] && marks[i] !== 'pending') s.classList.add(marks[i]); if (i === pos) s.classList.add('hl'); });
+}
+/** Without live words (slow device): move the highlight along with the learner's voice, estimated from speaking time. */
+function showFollow(c, spokenMs, expectedMs) {
+  const ws = spans(); if (!ws.length) return;
+  const i = Math.min(ws.length - 1, Math.floor(ws.length * spokenMs / Math.max(800, expectedMs)));
+  ws.forEach((s, j) => s.classList.toggle('hl', j === i));
+}
 function clearMarks() { spans().forEach(s => s.classList.remove('ok', 'close', 'bad')); const h = $('#heard'); if (h) h.innerHTML = ''; }
 /** Clears the learner's last answer only when the sentence changes, so it stays readable until then. */
 let lastChunk = -1;
@@ -163,7 +175,7 @@ async function runFrom(i) {
       const green = await learnerTurn(st, c, tok); if (!live(tok)) return;
       if (green && styleOf(track()) === 'simple') {
         // good answer: hear the model sentence once more (your answer stays on screen), then the next sentence
-        await wait(400, tok); if (!live(tok)) return;
+        await wait(150, tok); if (!live(tok)) return;
         await voice(c, st.ph.r); clearHl(); if (!live(tok)) return;
       }
       if (green) R.i = afterGreen(R.i);
@@ -209,7 +221,7 @@ function afterGreen(i) {
  * Returns {text, error} like the phone recognizer, 'notready' while the model is still downloading,
  * or null when the microphone is unavailable.
  */
-async function whisperTurn(maxMs, tok, onLive) {
+async function whisperTurn(c, maxMs, tok, onLive) {
   const ws = whisperState();
   if (ws.state !== 'ready') {
     loadWhisper().catch(() => {});
@@ -220,12 +232,24 @@ async function whisperTurn(maxMs, tok, onLive) {
   }
   const g = $('#gap'), gt = $('#gaptext');
   gt.textContent = tt('🎙 Now say it… I\'m listening', '🎙 حالا بگو… گوش می‌دهم'); gt.classList.add('listening'); $('#gapfill').style.width = '100%'; g.classList.add('on');
-  const rec = await recordUtterance({ maxMs: Math.min(maxMs, 15000), silenceMs: 750, isCancelled: () => !live(tok) });
+  // live updates while speaking: re-transcribe the audio so far about once a second, if this phone is fast enough
+  const liveOk = whisperSpeedMs() < (window.__liveLimitMs || 1500), expectedMs = voiceDur(c, 1) * 1000;
+  let inflight = null, lastPartial = null, lastAt = 0;
+  const onSpeech = (soFar, ms) => {
+    if (!liveOk) { showFollow(c, ms, expectedMs); return; }
+    if (inflight || ms - lastAt < 900) return;
+    lastAt = ms; const pcm = soFar();
+    inflight = transcribe(pcm, R.lang).then(t => { if (t && live(tok)) { lastPartial = { text: t, len: pcm.length }; onLive(t); } }).catch(() => {}).finally(() => { inflight = null; });
+  };
+  const rec = await recordUtterance({ maxMs: Math.min(maxMs, 15000), silenceMs: 750, isCancelled: () => !live(tok), onSpeech });
   g.classList.remove('on'); gt.classList.remove('listening'); gt.textContent = tt('Your turn — repeat it aloud', 'نوبت توئه — بلند تکرار کن');
   if (!live(tok)) return { text: '', error: null };
   if (rec.error) return rec.error === 'mic-denied' ? null : { text: '', error: rec.error };
   if (!rec.heard) return { text: '', error: null };
-  $('#heard').innerHTML = `<span class="lbl">${tt('Checking…', 'در حال بررسی…')}</span>`;
+  if (inflight) await inflight;
+  // the last live result already covers (almost) the whole answer: use it instead of transcribing again
+  if (lastPartial && lastPartial.len >= rec.pcm.length * 0.9) return { text: lastPartial.text, error: null };
+  if (!lastPartial) $('#heard').innerHTML = `<span class="lbl">${tt('Checking…', 'در حال بررسی…')}</span>`;
   try { const text = await transcribe(rec.pcm, R.lang); if (text) onLive(text); return { text, error: null }; }
   catch (e) { return { text: '', error: 'asr-failed' }; }
 }
@@ -257,10 +281,10 @@ function waitForTap(maxMs, tok, onLive, waitMs) {
 async function learnerTurn(st, c, tok) {
   if (R.noCheck) return silentGap(c, st, tok);
   const dur = voiceDur(c, st.ph.r), g = $('#gap'), gt = $('#gaptext'), hd = $('#heard'), mic = $('#micbox');
-  const onLive = t => { hd.innerHTML = `<span class="lbl">${tt('I heard: ', 'شنیدم: ')}</span><span class="txt">${esc(t)}</span>`; };
+  const onLive = t => { hd.innerHTML = `<span class="lbl">${tt('I heard: ', 'شنیدم: ')}</span><span class="txt">${esc(t)}</span>`; showLive(c, t); };
   const maxMs = (dur * 1.8 + 5) * 1000;
   let heard;
-  if (R.engine === 'whisper') heard = await whisperTurn(maxMs, tok, onLive);
+  if (R.engine === 'whisper') heard = await whisperTurn(c, maxMs, tok, onLive);
   else if (!recognitionSupported() || recognitionBlocked()) heard = null;      // no recognition here: don't show a dead button
   else if (micMode() === 'tap') {
     mic.classList.remove('hidden');
@@ -309,7 +333,7 @@ async function learnerTurn(st, c, tok) {
   }
   R.srFails = 0;
   const res = scoreSpeech(c.text, heard.text, R.lang);
-  showMarks(res.marks, c.text);
+  clearHl(); showMarks(res.marks, c.text);
   const col = res.score >= GREEN ? 'var(--ok)' : res.score >= 60 ? 'var(--de)' : 'var(--danger)';
   hd.innerHTML = `<span class="lbl">${tt('I heard: ', 'شنیدم: ')}</span><span class="txt">${esc(heard.text)}</span><span class="score" style="background:${col}">${num(res.score)}${tt('%', '٪')}</span>`;
   R.scores.push({ k: st.k, score: res.score });

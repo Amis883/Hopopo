@@ -1,49 +1,51 @@
-// In-app speech recognition with OpenAI's Whisper (tiny, multilingual), running on the device via
-// transformers.js + ONNX Runtime (WebAssembly). The library ships with the app (lib/transformers);
-// the model (~40 MB, quantized) is downloaded once from Hugging Face and then cached by the browser,
-// so it works offline afterwards. Nothing the learner says leaves the phone.
+// In-app speech recognition with OpenAI's Whisper (tiny, multilingual, 8-bit), running on the device
+// via transformers.js + ONNX Runtime (WebAssembly) inside a Web Worker (whisper.worker.js), so the
+// microphone recording and the UI keep running while it transcribes. The library ships with the app
+// (lib/transformers); the model (~40 MB) is downloaded once from Hugging Face and cached by the
+// browser, so it works offline afterwards. Nothing the learner says leaves the phone.
 import { lang as langInfo } from '../core/languages.js';
 
 export const MODEL_ID = 'Xenova/whisper-tiny';
-const LIB_DIR = new URL('../../lib/transformers/', import.meta.url).href;   // relative to this module
+const LIB_DIR = new URL('../../lib/transformers/', import.meta.url).href;
 
-let asr = null, loading = null, state = 'idle', progress = 0;
-const listeners = new Set();
+let worker = null, loading = null, state = 'idle', progress = 0, speedMs = Infinity, nextId = 1;
+const pending = new Map(), listeners = new Set();
 const emit = () => listeners.forEach(f => { try { f(state, progress); } catch (e) { /* ignore */ } });
 export const whisperState = () => ({ state, progress });
 export const onWhisperState = fn => { listeners.add(fn); return () => listeners.delete(fn); };
+/** How long one short transcription takes on this device (measured at warm-up). */
+export const whisperSpeedMs = () => speedMs;
 
-/** Loads (and on first use downloads) the model. Safe to call many times. */
+/** Loads (and on first use downloads) the model in the worker. Safe to call many times. */
 export function loadWhisper() {
-  if (asr) return Promise.resolve(asr);
+  if (state === 'ready') return Promise.resolve();
   if (loading) return loading;
   state = 'loading'; progress = 0; emit();
-  const files = {};
-  loading = (async () => {
-    const { env, pipeline } = await import(LIB_DIR + 'transformers.min.js');
-    env.backends.onnx.wasm.wasmPaths = LIB_DIR;
-    env.backends.onnx.wasm.numThreads = 1;              // GitHub Pages has no cross-origin isolation
-    if (window.__WHISPER_LOCAL__) { env.allowRemoteModels = false; env.allowLocalModels = true; env.localModelPath = window.__WHISPER_LOCAL__; }
-    asr = await pipeline('automatic-speech-recognition', MODEL_ID, {
-      dtype: 'q8', device: 'wasm',
-      progress_callback: p => {
-        if (p.status === 'progress' && p.total) {
-          files[p.file] = [p.loaded, p.total];
-          const v = Object.values(files), loaded = v.reduce((a, x) => a + x[0], 0), total = v.reduce((a, x) => a + x[1], 0);
-          progress = total ? loaded / total : 0; emit();
-        }
-      },
-    });
-    state = 'ready'; progress = 1; emit();
-    return asr;
-  })();
-  loading.catch(() => { loading = null; state = 'error'; emit(); });
+  loading = new Promise((resolve, reject) => {
+    try { worker = new Worker(new URL('./whisper.worker.js', import.meta.url), { type: 'module' }); }
+    catch (e) { reject(e); return; }
+    worker.onmessage = ({ data }) => {
+      if (data.type === 'progress') { progress = data.progress; emit(); }
+      else if (data.type === 'ready') { speedMs = data.speedMs; state = 'ready'; progress = 1; emit(); resolve(); }
+      else if (data.type === 'result') { const p = pending.get(data.id); if (p) { pending.delete(data.id); p.resolve(data.text); } }
+      else if (data.type === 'error') {
+        if (data.id && pending.has(data.id)) { pending.get(data.id).reject(new Error(data.message)); pending.delete(data.id); }
+        else { state = 'error'; emit(); reject(new Error(data.message)); }
+      }
+    };
+    worker.onerror = e => { state = 'error'; emit(); reject(e); };
+    worker.postMessage({ type: 'load', lib: LIB_DIR, model: MODEL_ID, local: window.__WHISPER_LOCAL__ ? new URL(window.__WHISPER_LOCAL__, location.href).href : null });
+  });
+  loading.catch(() => { loading = null; if (worker) { worker.terminate(); worker = null; } });
   return loading;
 }
 
-/** Transcribes 16 kHz mono audio spoken in `lang`. */
+/** Transcribes 16 kHz mono audio spoken in `lang`. Calls are answered in order by the worker. */
 export async function transcribe(pcm, lang) {
-  const model = await loadWhisper();
-  const out = await model(pcm, { language: langInfo(lang).name.toLowerCase(), task: 'transcribe' });
-  return String((out && out.text) || '').trim();
+  await loadWhisper();
+  const id = nextId++;
+  return new Promise((resolve, reject) => {
+    pending.set(id, { resolve, reject });
+    worker.postMessage({ type: 'run', id, pcm, language: langInfo(lang).name.toLowerCase() });
+  });
 }

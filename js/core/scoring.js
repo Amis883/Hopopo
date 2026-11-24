@@ -71,3 +71,24 @@ export function scoreSpeech(target, heard, lang) {
   const score = m ? Math.round(100 * out.reduce((a, x) => a + (x === 'ok' ? 1 : x === 'close' ? .6 : 0), 0) / m) : 0;
   return { marks: out, score };
 }
+
+/**
+ * Live progress while the learner is still speaking: aligns what was heard so far against the
+ * best-matching *prefix* of the target. Words up to that point get ok/close/bad, the rest 'pending';
+ * `pos` is the index of the word the learner is about to say.
+ */
+export function scorePartial(target, heard, lang) {
+  const n = tokens(target, lang).length;
+  if (!heard.trim()) return { marks: new Array(n).fill('pending'), pos: 0 };
+  const words = tokens(heard, lang).length;
+  let best = null;
+  // the learner has said roughly as many words as they've heard; search a small window around that
+  for (let k = Math.max(1, words - 3); k <= Math.min(n, words + 2); k++) {
+    const prefix = isNoSpace(lang) ? tokens(target, lang).slice(0, k).join('') : target.split(/\s+/).filter(Boolean).slice(0, k).join(' ');
+    const r = scoreSpeech(prefix, heard, lang);
+    const val = r.score - Math.abs(k - words) * 3;          // prefer the prefix length closest to what was said
+    if (!best || val > best.val) best = { val, k, marks: r.marks };
+  }
+  const marks = best.marks.concat(new Array(n - best.k).fill('pending'));
+  return { marks, pos: best.k };
+}
