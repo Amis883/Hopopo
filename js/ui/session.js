@@ -1,11 +1,11 @@
 // The practice session: a step runner over the plan, with speech, the learner's turn, and scoring.
 import { lang as langInfo, isRtl, trackColor } from '../core/languages.js';
-import { buildPlan, estDur, chunkStart, nextChunkStart } from '../core/planner.js';
+import { buildPlan, estDur, chunkStart, nextChunkStart, styleOf } from '../core/planner.js';
 import { scoreSpeech, tokens } from '../core/scoring.js';
 import { dayKey, stats } from '../core/stats.js';
 import { S, save } from '../data/store.js';
 import { getBook } from '../data/books.js';
-import { speak, stopSpeaking, unlockAudio, listenOnce, recognitionBlocked, stopListening, recognitionSupported } from '../services/speech.js';
+import { speak, stopSpeaking, unlockAudio, listenOnce, recognitionBlocked, stopListening, recognitionSupported, openListener } from '../services/speech.js';
 import { unlockClips, useAudio, playClip, stopClip } from '../services/audioclip.js';
 import { PROFILES } from '../core/languages.js';
 import { tt, num, langName, phaseText, weekdays, getUI } from '../i18n.js';
@@ -24,14 +24,17 @@ const track = () => S.tracks[R.lang];
 export async function startSession(l) {
   unlockAudio(); unlockClips(); // must run synchronously inside the click for iOS
   const t = S.tracks[l], meta = t.books[t.bookId];
-  if (!meta) { toast(tt('Add or choose a book first', 'اول یک کتاب اضافه یا انتخاب کن')); return renderTrack(l); }
+  // one tap opens the microphone for the whole session (no button per sentence)
+  const listener = t.check && (t.micMode || 'auto') === 'auto' && !isFramed ? openListener(l) : null;
+  if (!meta) { if (listener) listener.close(); toast(tt('Add or choose a book first', 'اول یک کتاب اضافه یا انتخاب کن')); return renderTrack(l); }
   const book = await getBook(l, t.bookId);
   if (!book) { toast(tt('This book\'s text isn\'t in this browser; import it again.', 'متن این کتاب در این مرورگر پیدا نشد؛ دوباره واردش کن.')); return renderTrack(l); }
   const isAudio = book.kind === 'audio';
   if (isAudio) useAudio(book.audio);
   const plan = buildPlan(t, meta, book.sentences, { wholeSentences: isAudio });
-  if (plan.newCount === 0) { toast(tt('You finished this book! 🎉 Add a new one or restart it.', 'این کتاب تمام شد! 🎉 کتاب جدید اضافه کن یا از اول شروع کن.'), 5000); return renderTrack(l); }
-  R = { lang: l, bookId: t.bookId, book, plan, i: 0, token: 0, playing: false, elapsed: 0, showText: true, scores: [] };
+  if (plan.newCount === 0) { if (listener) listener.close(); toast(tt('You finished this book! 🎉 Add a new one or restart it.', 'این کتاب تمام شد! 🎉 کتاب جدید اضافه کن یا از اول شروع کن.'), 5000); return renderTrack(l); }
+  if (R && R.listener) R.listener.close();
+  R = { lang: l, listener, bookId: t.bookId, book, plan, i: 0, token: 0, playing: false, elapsed: 0, showText: true, scores: [] };
   render(); wakeLock(true);
   // the phone's back gesture / button leaves the session cleanly
   try { history.pushState({ hopopoSession: 1 }, ''); } catch (e) { /* ignore */ }
@@ -97,7 +100,7 @@ function update() {
   if (ui.view !== 'session') return;
   const st = curStep(), c = R.plan.chunks[st.k], key = st.sec === 'main' ? (st.ph.blind ? 'blind' : st.ph.t) : st.sec;
   const [title, desc] = phaseText(key);
-  $('#phase').innerHTML = `<b>${title}${st.ph.t === 'check' ? tt(` (try ${num(st.ph.n)} of ${num(st.ph.of)})`, ` (تلاش ${num(st.ph.n)} از ${num(st.ph.of)})`) : ''}</b><small>${desc}</small>`;
+  $('#phase').innerHTML = `<b>${title}${st.ph.retry ? tt(' — once more', ' — یک بار دیگر') : st.ph.t === 'check' && styleOf(track()) === 'full' ? tt(` (try ${num(st.ph.n)} of ${num(st.ph.of)})`, ` (تلاش ${num(st.ph.n)} از ${num(st.ph.of)})`) : ''}</b><small>${desc}</small>`;
   const firstNew = R.plan.chunks.length - R.plan.newCount;
   $('#counter').textContent = st.sec === 'review' ? tt('Review', 'مرور')
     : `${st.sec === 'final' ? tt('Continuous pass – ', 'دور پیوسته – ') : ''}${tt(`Chunk ${num(st.k - firstNew + 1)} of ${num(R.plan.newCount)}`, `تکهٔ ${num(st.k - firstNew + 1)} از ${num(R.plan.newCount)}`)}`;
@@ -172,7 +175,7 @@ async function silentGap(c, st, tok) {
  * phones often fail to pick up speech, and marking the learner wrong for that is discouraging and wrong.
  * After 3 failed turns in a row the check is switched off for the rest of the session.
  */
-const GREEN = 85; // score at which a sentence counts as said correctly
+const GREEN = 80; // score at which a sentence counts as said correctly
 
 /**
  * What happens after a green check (track setting `afterGreen`):
@@ -181,7 +184,7 @@ const GREEN = 85; // score at which a sentence counts as said correctly
  *  'repeat'           – skip nothing
  * Returns the index of the last step to skip (the runner then advances by one).
  */
-function greenMode() { const t = track(); return t.afterGreen || (t.skipOnGreen === false ? 'repeat' : 'shadow'); }
+function greenMode() { const t = track(); if (styleOf(t) === 'simple') return 'next'; return t.afterGreen || (t.skipOnGreen === false ? 'repeat' : 'shadow'); }
 function afterGreen(i) {
   const steps = R.plan.steps, mode = greenMode();
   if (mode === 'next') return nextChunkStart(steps, i) - 1;
@@ -191,7 +194,7 @@ function afterGreen(i) {
 /** iPhone/iPad: Safari only opens the microphone for speech recognition from a tap. */
 const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 /** 'tap' = learner taps 🎙 to answer (needed on iOS); 'auto' = listen right after the sentence. */
-const micMode = () => R.forceTap ? 'tap' : (track().micMode || (isIOS() ? 'tap' : 'auto'));
+const micMode = () => track().micMode || 'auto';
 
 /**
  * Tap mode: show a big 🎙 button and wait. The tap handler (actions.micgo) starts recognition
@@ -228,9 +231,13 @@ async function learnerTurn(st, c, tok) {
     if (r === 'skip' || r === 'timeout') { hd.innerHTML = `<span class="lbl">${tt('Skipped', 'رد شد')}</span>`; await wait(500, tok); return; }
     heard = r;
   } else {
-    await wait(300, tok); if (!live(tok)) return;   // let the speaker audio release before the mic opens
+    await wait(300, tok); if (!live(tok)) return;   // let the speaker audio release
     gt.textContent = tt('🎙 Now say it… I\'m listening', '🎙 حالا بگو… گوش می‌دهم'); gt.classList.add('listening'); $('#gapfill').style.width = '100%'; g.classList.add('on');
-    heard = await listenOnce(R.lang, maxMs, () => !live(tok), onLive);
+    if (R.listener && R.listener.alive()) heard = await R.listener.capture(R.listener.mark(), maxMs, () => !live(tok), onLive);
+    if (heard === undefined || (heard === null && live(tok) && !recognitionBlocked())) {
+      if (R.listener && !R.listener.alive()) { R.listener.close(); R.listener = null; }   // the session mic died: listen per sentence
+      heard = await listenOnce(R.lang, maxMs, () => !live(tok), onLive);
+    }
     g.classList.remove('on'); gt.classList.remove('listening'); gt.textContent = tt('Your turn — repeat it aloud', 'نوبت توئه — بلند تکرار کن');
     if (!live(tok)) return;
   }
@@ -246,13 +253,9 @@ async function learnerTurn(st, c, tok) {
     hd.innerHTML = `<span class="lbl">${heard.error
       ? tt(`The phone couldn't listen (${esc(heard.error)}).`, `گوشی نتوانست گوش بدهد (${esc(heard.error)}).`)
       : tt('I didn\'t catch that — no problem, keep going.', 'صدایت را نگرفتم — اشکالی ندارد، ادامه بده.')}</span>`;
-    if (micMode() === 'auto' && R.srFails >= 2) {
-      // automatic listening isn't working on this phone: switch to tap-to-speak instead of giving up
-      R.forceTap = true; R.srFails = 0;
-      toast(tt('Switching to tap-to-speak: after each sentence, tap 🎙 and say it.', 'حالت «بزن و بگو» فعال شد: بعد از هر جمله 🎙 را بزن و بگو.'), 6000);
-    } else if (R.srFails >= 3) {
+    if (R.srFails >= 3) {
       R.noCheck = true;
-      toast(tt('Speech check isn\'t picking you up on this phone, so it\'s off for this session. Try "Test the speech check" in Book & settings.', 'بررسی گفتار روی این گوشی صدایت را نمی‌گیرد، برای همین در این جلسه خاموش شد. در «کتاب و تنظیمات» دکمهٔ «تست بررسی گفتار» را امتحان کن.'), 7000);
+      toast(tt('Speech check isn\'t picking you up on this phone, so it\'s off for this session (you still get a pause to repeat). If you want it, choose "Tap 🎙, then speak" in Book & settings.', 'بررسی گفتار روی این گوشی صدایت را نمی‌گیرد، برای همین در این جلسه خاموش شد (مکث برای تکرار می‌ماند). اگر خواستی، در «کتاب و تنظیمات» گزینهٔ «بزن 🎙 و بعد بگو» را انتخاب کن.'), 7000);
     }
     await wait(1400, tok);
     return;
@@ -301,6 +304,7 @@ function saveSession(complete) {
 function finish() {
   if (ui.view !== 'session') return;
   stopAudio(); R.playing = false; wakeLock(false);
+  if (R.listener) { R.listener.close(); R.listener = null; }
   saveSession(true); renderDone();
 }
 
@@ -334,6 +338,7 @@ function againFinal() {
 export function exitSession() {
   document.getElementById('quitov')?.remove();
   try { stopAudio(); } catch (e) { /* ignore */ }
+  try { if (R && R.listener) { R.listener.close(); R.listener = null; } } catch (e) { /* ignore */ }
   try { wakeLock(false); } catch (e) { /* ignore */ }
   try { if (R && ui.view === 'session') saveSession(false); } catch (e) { /* ignore */ }
   renderHome();

@@ -3,11 +3,24 @@ import { PROFILES, lang as langInfo } from './languages.js';
 import { chunkSentence, wc } from './text.js';
 
 /** Phases for a track, swapping plain "echo" repeats for checked repeats when speech check is on. */
+/**
+ * Practice style (track.style):
+ *  'simple' (default) – read once → learner says it once; one retry only if it wasn't right
+ *                       (the runner skips the retry when the first try is good enough)
+ *  'full'             – the CEFR profile: listen, repeat/check, speak along, continuous pass
+ */
+export const styleOf = track => track.style || 'simple';
+
 export function phasesFor(track) {
   const prof = PROFILES[track.level];
+  const ref = prof.phases.find(p => p.t === 'echo') || prof.phases.find(p => p.t === 'listen');
+  if (styleOf(track) === 'simple') {
+    return track.check
+      ? [{ t: 'check', r: ref.r, n: 1, of: 2 }, { t: 'check', r: ref.r, n: 2, of: 2, retry: true }]
+      : [{ t: 'echo', r: ref.r }];
+  }
   if (!track.check) return prof.phases;
   const n = Math.max(1, Math.min(3, track.checkReps || 2));
-  const ref = prof.phases.find(p => p.t === 'echo') || prof.phases.find(p => p.t === 'listen');
   const checks = Array.from({ length: n }, (_, i) => ({ t: 'check', r: ref.r, n: i + 1, of: n }));
   return [...prof.phases.filter(p => p.t === 'listen'), ...checks, ...prof.phases.filter(p => p.t === 'shadow')];
 }
@@ -34,6 +47,8 @@ export function buildPlan(track, meta, sentences, { wholeSentences = false } = {
   // Recorded audio can't be cut inside a sentence, so audio books use whole sentences as chunks.
   const chunk = s => wholeSentences ? [s] : chunkSentence(s, prof.maxWords, lang);
   const phases = phasesFor(track);
+  // continuous pass at the end: part of the full style; optional in the simple style
+  const finalPass = track.finalPass ?? styleOf(track) === 'full';
   const chunks = [], steps = []; let est = 0;
 
   if (track.warmup && meta.last && meta.last[1] > meta.last[0] && meta.last[1] <= sentences.length) {
@@ -52,13 +67,13 @@ export function buildPlan(track, meta, sentences, { wholeSentences = false } = {
     let add = 0;
     for (const c of cs) {
       for (const ph of phases) add += stepTime(c, ph.t, ph.r * sp, lang);
-      add += stepTime(c, 'shadow', prof.finalRate * sp, lang);
+      if (finalPass) add += stepTime(c, 'shadow', prof.finalRate * sp, lang);
     }
     if (chunks.length > firstNew && est + add > target) break;
     est += add; for (const c of cs) chunks.push({ text: c, sent: s }); s++;
   }
   for (let k = firstNew; k < chunks.length; k++) for (const ph of phases) steps.push({ k, sec: 'main', ph: { ...ph, r: ph.r * sp } });
-  for (let k = firstNew; k < chunks.length; k++) steps.push({ k, sec: 'final', ph: { t: 'shadow', r: prof.finalRate * sp } });
+  if (finalPass) for (let k = firstNew; k < chunks.length; k++) steps.push({ k, sec: 'final', ph: { t: 'shadow', r: prof.finalRate * sp } });
   return { chunks, steps, start: meta.pos, end: s, est, newCount: chunks.length - firstNew };
 }
 

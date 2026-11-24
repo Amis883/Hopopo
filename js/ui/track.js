@@ -42,6 +42,10 @@ export async function renderTrack(l) {
     <div class="row" style="margin-top:8px"><label>${tt('Sentence #', 'جملهٔ شمارهٔ')}</label><input type="number" id="posnum" min="1" max="${meta.total || 1}" value="${meta.pos + 1}"><button class="ghost small" data-act="setpos">${tt('Go', 'برو')}</button><button class="ghost small" data-act="restart">${tt('Restart', 'از اول')}</button></div>
   </section>` : ''}
   <section class="card"><h3>${tt(`${langName(l)} settings`, `تنظیمات ${langName(l)}`)}</h3>
+    <div class="field"><span>${tt('Practice style', 'روش تمرین')}</span><select id="style">${[
+      ['simple', tt('Simple: hear it once → say it → next (one retry if below 80%)', 'ساده: یک بار بشنو ← بگو ← بعدی (زیر ۸۰٪ یک بار دیگر)')],
+      ['full', tt('Full shadowing: listen, repeat, speak along, continuous pass', 'شادوینگ کامل: گوش، تکرار، همزمان‌خوانی، دور پیوسته')],
+    ].map(([v, label]) => `<option value="${v}" ${(t.style || 'simple') === v ? 'selected' : ''}>${label}</option>`).join('')}</select></div>
     <div class="field"><span>${tt('My level', 'سطح من')}</span><select id="level">${LEVELS.map(k => `<option ${k === t.level ? 'selected' : ''}>${k}</option>`).join('')}</select></div>
     <div class="field"><span>${tt('Session length', 'مدت هر جلسه')} <output id="minout">${tt(`${num(t.minutes)} min`, `${num(t.minutes)} دقیقه`)}</output></span><input type="range" id="minutes" min="10" max="20" step="1" value="${t.minutes}"></div>
     <div class="field"><span>${tt('Voice speed', 'سرعت صدا')} <output id="spout">×${num(t.speed)}</output></span><input type="range" id="speed" min="0.7" max="1.3" step="0.05" value="${t.speed}"></div>
@@ -52,9 +56,9 @@ export async function renderTrack(l) {
       <button class="ghost small" style="margin-top:6px" data-act="speechtest">🎙 ${tt('Test the speech check', 'تست بررسی گفتار')}</button>
       <div class="sptest" id="sptest"></div></div>
     <div class="field"><span>🎙 ${tt('How to answer', 'نحوهٔ جواب دادن')}</span><select id="micMode">${[
-      ['tap', tt('Tap 🎙, then speak (best on iPhone)', 'بزن 🎙 و بعد بگو (بهترین برای آیفون)')],
-      ['auto', tt('Listen automatically after each sentence', 'بعد از هر جمله خودکار گوش بده')],
-    ].map(([v, label]) => `<option value="${v}" ${(t.micMode || (/iPad|iPhone|iPod/.test(navigator.userAgent) ? 'tap' : 'auto')) === v ? 'selected' : ''}>${label}</option>`).join('')}</select></div>
+      ['auto', tt('Hands-free: listen automatically (recommended)', 'بدون دکمه: خودکار گوش بده (پیشنهادی)')],
+      ['tap', tt('Tap 🎙 before speaking', 'قبل از گفتن 🎙 را بزن')],
+    ].map(([v, label]) => `<option value="${v}" ${(t.micMode || 'auto') === v ? 'selected' : ''}>${label}</option>`).join('')}</select></div>
     <div class="field"><span>✅ ${tt('When a sentence turns green', 'وقتی جمله سبز شد')}</span><select id="afterGreen">${[
       ['shadow', tt('Skip the 2nd check, still shadow it (recommended)', 'تلاش دوم رد شود، ولی همزمان‌خوانی بماند (پیشنهادی)')],
       ['next', tt('Go straight to the next sentence', 'مستقیم برو جملهٔ بعد')],
@@ -128,6 +132,7 @@ export function onChange(ev) {
   if (id === 'level') { t.level = ev.target.value; save(); $('#lhint').textContent = profileHint(t.level); }
   if (id === 'voice') { t.voiceURI = ev.target.value; save(); }
   if (id === 'warmup') { t.warmup = ev.target.checked; save(); }
+  if (id === 'style') { t.style = ev.target.value; save(); }
   if (id === 'micMode') { t.micMode = ev.target.value; save(); }
   if (id === 'afterGreen') { t.afterGreen = ev.target.value; save(); }
   if (id === 'check') { t.check = ev.target.checked; save(); }
