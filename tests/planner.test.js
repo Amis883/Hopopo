@@ -37,8 +37,14 @@ test('longer budget → more material', () => {
   assert.ok(b.newCount > a.newCount);
 });
 
-test('plan continues from the saved position and warms up with the last session', () => {
-  const t = newTrack('de', 'A1');
+test('by default the session starts exactly at the saved sentence (no review)', () => {
+  const p = buildPlan(newTrack('de', 'A1'), meta(40, [30, 40]), sentences);
+  assert.equal(p.steps[0].sec, 'main');
+  assert.equal(p.chunks[p.steps[0].k].sent, 40);
+});
+
+test('with warm-up on, the plan reviews the last session first', () => {
+  const t = { ...newTrack('de', 'A1'), warmup: true };
   const p = buildPlan(t, meta(40, [30, 40]), sentences);
   assert.equal(p.start, 40);
   assert.equal(p.steps[0].sec, 'review');

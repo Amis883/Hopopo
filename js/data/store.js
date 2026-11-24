@@ -6,7 +6,7 @@ const LS_KEY = 'shadowing.v1';
 
 /** A learning track: one language with its own level, books, progress and history. */
 export function newTrack(lang, level = 'A1') {
-  const t = { lang, level, minutes: 12, speed: 1, voiceURI: '', warmup: true, check: true, checkReps: 2, afterGreen: 'shadow', style: 'simple', srEngine: 'auto', bookId: null, books: {}, history: [] };
+  const t = { lang, level, minutes: 12, speed: 1, voiceURI: '', warmup: false, check: true, checkReps: 2, afterGreen: 'shadow', style: 'simple', srEngine: 'auto', bookId: null, books: {}, history: [] };
   if (SAMPLES[lang]) {
     const id = 'sample-' + lang;
     t.books[id] = { title: SAMPLES[lang].title, pos: 0, total: 0, last: null, sample: true };
@@ -28,7 +28,8 @@ export function loadState() {
   if (!s || !s.tracks) return defaults();
   for (const k of Object.keys(s.tracks)) s.tracks[k] = Object.assign(newTrack(k), s.tracks[k]);
   if (!Array.isArray(s.order)) s.order = Object.keys(s.tracks);
-  if (s.onboarded === undefined) s.onboarded = true;            // users from before the welcome screen
+  if (s.onboarded === undefined) s.onboarded = true;
+  if (!s.noWarmupDefault) { for (const k of Object.keys(s.tracks)) s.tracks[k].warmup = false; s.noWarmupDefault = true; }  // v2.8: continue exactly where you stopped            // users from before the welcome screen
   s.order = s.order.filter(k => s.tracks[k]);
   for (const k of s.order) { const sm = s.tracks[k].books['sample-' + k]; if (sm && SAMPLES[k]) sm.title = SAMPLES[k].title; }
   return s;

@@ -139,6 +139,9 @@ function showMarks(marks, text) {
   ws.forEach(s => { const n = tokens(s.textContent, R.lang).length; const part = marks.slice(k, k + n); k += n; const worst = part.reduce((a, x) => rank[x] > rank[a] ? x : a, 'ok'); s.classList.remove('ok', 'close', 'bad'); s.classList.add(worst); });
 }
 function clearMarks() { spans().forEach(s => s.classList.remove('ok', 'close', 'bad')); const h = $('#heard'); if (h) h.innerHTML = ''; }
+/** Clears the learner's last answer only when the sentence changes, so it stays readable until then. */
+let lastChunk = -1;
+function clearForStep(k) { if (k !== lastChunk) { clearMarks(); lastChunk = k; } else spans().forEach(s => s.classList.remove('ok', 'close', 'bad')); }
 
 function wait(ms, tok, onTick) {
   return new Promise(res => { const t0 = Date.now(); const iv = setInterval(() => { const el = Date.now() - t0; if (onTick) onTick(el / ms); if (!live(tok) || el >= ms) { clearInterval(iv); res(); } }, 50); });
@@ -152,16 +155,21 @@ async function runFrom(i) {
     if (!live(tok)) return;
     commitProgress(); update();
     const st = R.plan.steps[R.i], c = R.plan.chunks[st.k];
-    clearMarks();
+    clearForStep(st.k);
     await voice(c, st.ph.r);
     clearHl();
     if (!live(tok)) return;
     if (st.ph.t === 'check') {
       const green = await learnerTurn(st, c, tok); if (!live(tok)) return;
+      if (green && styleOf(track()) === 'simple') {
+        // good answer: hear the model sentence once more (your answer stays on screen), then the next sentence
+        await wait(400, tok); if (!live(tok)) return;
+        await voice(c, st.ph.r); clearHl(); if (!live(tok)) return;
+      }
       if (green) R.i = afterGreen(R.i);
     }
     if (st.ph.t === 'echo') { await silentGap(c, st, tok); if (!live(tok)) return; }
-    await wait(600, tok);
+    await wait(350, tok);
     if (!live(tok)) return;
     R.i++;
   }
@@ -212,7 +220,7 @@ async function whisperTurn(maxMs, tok, onLive) {
   }
   const g = $('#gap'), gt = $('#gaptext');
   gt.textContent = tt('🎙 Now say it… I\'m listening', '🎙 حالا بگو… گوش می‌دهم'); gt.classList.add('listening'); $('#gapfill').style.width = '100%'; g.classList.add('on');
-  const rec = await recordUtterance({ maxMs: Math.min(maxMs, 15000), isCancelled: () => !live(tok) });
+  const rec = await recordUtterance({ maxMs: Math.min(maxMs, 15000), silenceMs: 750, isCancelled: () => !live(tok) });
   g.classList.remove('on'); gt.classList.remove('listening'); gt.textContent = tt('Your turn — repeat it aloud', 'نوبت توئه — بلند تکرار کن');
   if (!live(tok)) return { text: '', error: null };
   if (rec.error) return rec.error === 'mic-denied' ? null : { text: '', error: rec.error };
@@ -307,8 +315,8 @@ async function learnerTurn(st, c, tok) {
   R.scores.push({ k: st.k, score: res.score });
   const green = res.score >= GREEN;
   const mode = greenMode();
-  if (green && mode !== 'repeat') hd.insertAdjacentHTML('beforeend', `<div class="lbl" style="margin-top:4px">✅ ${mode === 'next' ? tt('Great — next sentence', 'عالی — جملهٔ بعد') : tt('Great — now speak along', 'عالی — حالا همزمان بخوان')}</div>`);
-  await wait(green ? 1300 : 2800, tok);
+  if (green && mode !== 'repeat') hd.insertAdjacentHTML('beforeend', `<div class="lbl" style="margin-top:4px">✅ ${styleOf(track()) === 'simple' ? tt('Great — listen once more, then the next sentence', 'عالی — یک بار دیگر گوش بده، بعد جملهٔ بعد') : mode === 'next' ? tt('Great — next sentence', 'عالی — جملهٔ بعد') : tt('Great — now speak along', 'عالی — حالا همزمان بخوان')}</div>`);
+  await wait(green ? (styleOf(track()) === 'simple' ? 300 : 1300) : 1800, tok);
   return green;
 }
 

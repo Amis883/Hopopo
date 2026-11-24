@@ -15,9 +15,10 @@ export function phasesFor(track) {
   const prof = PROFILES[track.level];
   const ref = prof.phases.find(p => p.t === 'echo') || prof.phases.find(p => p.t === 'listen');
   if (styleOf(track) === 'simple') {
+    const r = prof.finalRate;   // natural shadowing speed for the level (A1 0.8 … C1 1.05)
     return track.check
-      ? [{ t: 'check', r: ref.r, n: 1, of: 2 }, { t: 'check', r: ref.r, n: 2, of: 2, retry: true }]
-      : [{ t: 'echo', r: ref.r }];
+      ? [{ t: 'check', r, n: 1, of: 2 }, { t: 'check', r, n: 2, of: 2, retry: true }]
+      : [{ t: 'echo', r }];
   }
   if (!track.check) return prof.phases;
   const n = Math.max(1, Math.min(3, track.checkReps || 2));
