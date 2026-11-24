@@ -7,6 +7,9 @@ import { S, save } from '../data/store.js';
 import { getBook } from '../data/books.js';
 import { speak, stopSpeaking, unlockAudio, listenOnce, recognitionBlocked, stopListening, recognitionSupported, openListener } from '../services/speech.js';
 import { unlockClips, useAudio, playClip, stopClip } from '../services/audioclip.js';
+import { engineFor } from '../services/engine.js';
+import { primeAudio, requestMic, recordUtterance, micSupported } from '../services/mic.js';
+import { loadWhisper, transcribe, whisperState } from '../services/whisper.js';
 import { PROFILES } from '../core/languages.js';
 import { tt, num, langName, phaseText, weekdays, getUI } from '../i18n.js';
 import { app, $, esc, toast, ui, isFramed, mmss } from './dom.js';
@@ -25,7 +28,9 @@ export async function startSession(l) {
   unlockAudio(); unlockClips(); // must run synchronously inside the click for iOS
   const t = S.tracks[l], meta = t.books[t.bookId];
   // one tap opens the microphone for the whole session (no button per sentence)
-  const listener = t.check && (t.micMode || 'auto') === 'auto' && !isFramed ? openListener(l) : null;
+  const engine = engineFor(t);
+  if (t.check && engine === 'whisper' && !isFramed) { primeAudio(); requestMic().catch(() => {}); loadWhisper().catch(() => {}); }
+  const listener = t.check && engine === 'phone' && (t.micMode || 'auto') === 'auto' && !isFramed ? openListener(l) : null;
   if (!meta) { if (listener) listener.close(); toast(tt('Add or choose a book first', 'اول یک کتاب اضافه یا انتخاب کن')); return renderTrack(l); }
   const book = await getBook(l, t.bookId);
   if (!book) { toast(tt('This book\'s text isn\'t in this browser; import it again.', 'متن این کتاب در این مرورگر پیدا نشد؛ دوباره واردش کن.')); return renderTrack(l); }
@@ -34,7 +39,7 @@ export async function startSession(l) {
   const plan = buildPlan(t, meta, book.sentences, { wholeSentences: isAudio });
   if (plan.newCount === 0) { if (listener) listener.close(); toast(tt('You finished this book! 🎉 Add a new one or restart it.', 'این کتاب تمام شد! 🎉 کتاب جدید اضافه کن یا از اول شروع کن.'), 5000); return renderTrack(l); }
   if (R && R.listener) R.listener.close();
-  R = { lang: l, listener, bookId: t.bookId, book, plan, i: 0, token: 0, playing: false, elapsed: 0, showText: true, scores: [] };
+  R = { lang: l, engine, listener, bookId: t.bookId, book, plan, i: 0, token: 0, playing: false, elapsed: 0, showText: true, scores: [] };
   render(); wakeLock(true);
   // the phone's back gesture / button leaves the session cleanly
   try { history.pushState({ hopopoSession: 1 }, ''); } catch (e) { /* ignore */ }
@@ -191,6 +196,32 @@ function afterGreen(i) {
   if (mode === 'shadow') { const { k, sec } = steps[i]; while (steps[i + 1] && steps[i + 1].k === k && steps[i + 1].sec === sec && steps[i + 1].ph.t === 'check') i++; }
   return i;
 }
+/**
+ * In-app recognition turn: record one answer (VAD), then transcribe with Whisper on the device.
+ * Returns {text, error} like the phone recognizer, 'notready' while the model is still downloading,
+ * or null when the microphone is unavailable.
+ */
+async function whisperTurn(maxMs, tok, onLive) {
+  const ws = whisperState();
+  if (ws.state !== 'ready') {
+    loadWhisper().catch(() => {});
+    $('#heard').innerHTML = `<span class="lbl">${ws.state === 'error'
+      ? tt('In-app speech recognition couldn\'t be downloaded (check your connection). Repeat aloud for now.', 'دانلود تشخیص گفتار داخل اپ ممکن نشد (اینترنت را چک کن). فعلاً بلند تکرار کن.')
+      : tt(`Preparing in-app speech recognition… ${Math.round(ws.progress * 100)}% — repeat aloud for now.`, `در حال آماده‌سازی تشخیص گفتار داخل اپ… ${num(Math.round(ws.progress * 100))}٪ — فعلاً بلند تکرار کن.`)}</span>`;
+    return 'notready';
+  }
+  const g = $('#gap'), gt = $('#gaptext');
+  gt.textContent = tt('🎙 Now say it… I\'m listening', '🎙 حالا بگو… گوش می‌دهم'); gt.classList.add('listening'); $('#gapfill').style.width = '100%'; g.classList.add('on');
+  const rec = await recordUtterance({ maxMs: Math.min(maxMs, 15000), isCancelled: () => !live(tok) });
+  g.classList.remove('on'); gt.classList.remove('listening'); gt.textContent = tt('Your turn — repeat it aloud', 'نوبت توئه — بلند تکرار کن');
+  if (!live(tok)) return { text: '', error: null };
+  if (rec.error) return rec.error === 'mic-denied' ? null : { text: '', error: rec.error };
+  if (!rec.heard) return { text: '', error: null };
+  $('#heard').innerHTML = `<span class="lbl">${tt('Checking…', 'در حال بررسی…')}</span>`;
+  try { const text = await transcribe(rec.pcm, R.lang); if (text) onLive(text); return { text, error: null }; }
+  catch (e) { return { text: '', error: 'asr-failed' }; }
+}
+
 /** iPhone/iPad: Safari only opens the microphone for speech recognition from a tap. */
 const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 /** 'tap' = learner taps 🎙 to answer (needed on iOS); 'auto' = listen right after the sentence. */
@@ -221,7 +252,8 @@ async function learnerTurn(st, c, tok) {
   const onLive = t => { hd.innerHTML = `<span class="lbl">${tt('I heard: ', 'شنیدم: ')}</span><span class="txt">${esc(t)}</span>`; };
   const maxMs = (dur * 1.8 + 5) * 1000;
   let heard;
-  if (!recognitionSupported() || recognitionBlocked()) heard = null;      // no recognition here: don't show a dead button
+  if (R.engine === 'whisper') heard = await whisperTurn(maxMs, tok, onLive);
+  else if (!recognitionSupported() || recognitionBlocked()) heard = null;      // no recognition here: don't show a dead button
   else if (micMode() === 'tap') {
     mic.classList.remove('hidden');
     const r = await waitForTap(maxMs, tok, t => { mic.querySelector('.miclbl').textContent = tt('Listening…', 'در حال گوش دادن…'); onLive(t); }, (dur * 3 + 12) * 1000);
@@ -241,9 +273,11 @@ async function learnerTurn(st, c, tok) {
     g.classList.remove('on'); gt.classList.remove('listening'); gt.textContent = tt('Your turn — repeat it aloud', 'نوبت توئه — بلند تکرار کن');
     if (!live(tok)) return;
   }
+  if (heard === 'notready') return silentGap(c, st, tok);
   if (heard === null) {
     R.noCheck = true;
-    toast(recognitionBlocked() ? tt('Microphone or speech recognition is not allowed. iPhone: Settings → Siri → turn on Siri & Dictation, and allow the microphone for Safari. Continuing with repeat pauses.', 'میکروفون یا تشخیص گفتار اجازه ندارد. آیفون: Settings ← Siri ← Siri & Dictation را روشن کن و اجازهٔ میکروفون Safari را بده. با مکث برای تکرار ادامه می‌دهیم.')
+    toast(R.engine === 'whisper' ? tt('Microphone access is off for this app. iPhone: Settings → Safari (or the app) → Microphone → Allow. Continuing with repeat pauses.', 'دسترسی میکروفون برای این اپ خاموش است. آیفون: Settings ← Safari ← Microphone ← Allow. با مکث برای تکرار ادامه می‌دهیم.')
+      : recognitionBlocked() ? tt('Microphone or speech recognition is not allowed. iPhone: Settings → Siri → turn on Siri & Dictation, and allow the microphone for Safari. Continuing with repeat pauses.', 'میکروفون یا تشخیص گفتار اجازه ندارد. آیفون: Settings ← Siri ← Siri & Dictation را روشن کن و اجازهٔ میکروفون Safari را بده. با مکث برای تکرار ادامه می‌دهیم.')
       : isFramed ? tt('The speech check only works in the installed app; here you just get a pause to repeat.', 'بررسی گفتار فقط در نسخهٔ نصب‌شدهٔ اپ کار می‌کند؛ اینجا فقط فرصت تکرار داری.')
       : tt('This browser has no speech recognition; continuing with repeat pauses.', 'این مرورگر تشخیص گفتار ندارد؛ با مکث برای تکرار ادامه می‌دهیم.'), 8000);
     return silentGap(c, st, tok);
@@ -253,7 +287,12 @@ async function learnerTurn(st, c, tok) {
     hd.innerHTML = `<span class="lbl">${heard.error
       ? tt(`The phone couldn't listen (${esc(heard.error)}).`, `گوشی نتوانست گوش بدهد (${esc(heard.error)}).`)
       : tt('I didn\'t catch that — no problem, keep going.', 'صدایت را نگرفتم — اشکالی ندارد، ادامه بده.')}</span>`;
-    if (R.srFails >= 3) {
+    if (R.engine === 'phone' && R.srFails >= 2 && micSupported() && !isFramed) {
+      R.engine = 'whisper'; R.srFails = 0;
+      if (R.listener) { R.listener.close(); R.listener = null; }
+      loadWhisper().catch(() => {});
+      toast(tt('The phone\'s speech recognition isn\'t hearing you, so I\'m switching to in-app recognition (one-time download ~40 MB).', 'تشخیص گفتار گوشی صدایت را نمی‌گیرد؛ به تشخیص داخل اپ می‌روم (یک بار دانلود حدود ۴۰ مگابایت).'), 7000);
+    } else if (R.srFails >= 3) {
       R.noCheck = true;
       toast(tt('Speech check isn\'t picking you up on this phone, so it\'s off for this session (you still get a pause to repeat). If you want it, choose "Tap 🎙, then speak" in Book & settings.', 'بررسی گفتار روی این گوشی صدایت را نمی‌گیرد، برای همین در این جلسه خاموش شد (مکث برای تکرار می‌ماند). اگر خواستی، در «کتاب و تنظیمات» گزینهٔ «بزن 🎙 و بعد بگو» را انتخاب کن.'), 7000);
     }

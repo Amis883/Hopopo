@@ -3,6 +3,9 @@ import { PROFILES, LEVELS, lang as langInfo, isRtl, trackColor } from '../core/l
 import { S, save, removeTrack } from '../data/store.js';
 import { getBook, deleteBook, forgetBooks } from '../data/books.js';
 import { voicesFor, voiceFor, onVoicesChanged, speak, unlockAudio, recognitionSupported, listenOnce, recognitionBlocked } from '../services/speech.js';
+import { engineFor } from '../services/engine.js';
+import { primeAudio, recordUtterance } from '../services/mic.js';
+import { loadWhisper, transcribe, whisperState, onWhisperState } from '../services/whisper.js';
 import { tt, num, langName, getUI } from '../i18n.js';
 import { app, $, esc, toast, ui, isFramed, confirmTap as confirmed } from './dom.js';
 import { importPanel } from './importFlow.js';
@@ -55,6 +58,12 @@ export async function renderTrack(l) {
       <div class="msg">${speechNote}</div>
       <button class="ghost small" style="margin-top:6px" data-act="speechtest">🎙 ${tt('Test the speech check', 'تست بررسی گفتار')}</button>
       <div class="sptest" id="sptest"></div></div>
+    <div class="field"><span>🧠 ${tt('Speech recognition', 'تشخیص گفتار')}</span><select id="srEngine">${[
+      ['auto', tt('Automatic (recommended)', 'خودکار (پیشنهادی)')],
+      ['whisper', tt('In-app (Whisper) — works on iPhone home-screen apps, offline after one download', 'داخل اپ (Whisper) — در اپ نصب‌شدهٔ آیفون کار می‌کند، بعد از یک بار دانلود آفلاین')],
+      ['phone', tt("Phone's built-in (Siri / Google)", 'خود گوشی (Siri / Google)')],
+    ].map(([v, label]) => `<option value="${v}" ${(t.srEngine || 'auto') === v ? 'selected' : ''}>${label}</option>`).join('')}</select>
+      <div class="msg" id="engmsg"></div></div>
     <div class="field"><span>🎙 ${tt('How to answer', 'نحوهٔ جواب دادن')}</span><select id="micMode">${[
       ['auto', tt('Hands-free: listen automatically (recommended)', 'بدون دکمه: خودکار گوش بده (پیشنهادی)')],
       ['tap', tt('Tap 🎙 before speaking', 'قبل از گفتن 🎙 را بزن')],
@@ -69,7 +78,22 @@ export async function renderTrack(l) {
     <button class="ghost small danger" style="margin-top:12px" data-act="removelang">${tt(`Remove ${langName(l)}`, `حذف ${langName(l)}`)}</button>
   </section></div>`;
   refreshVoiceSelect();
+  refreshEngine();
 }
+
+/** Shows which recognizer is in use and the in-app model's download state. */
+function refreshEngine() {
+  const el = $('#engmsg'); if (!el || !ui.lang) return;
+  const eng = engineFor(S.tracks[ui.lang]);
+  if (eng === 'phone') { el.innerHTML = tt('Using the phone\'s built-in recognition.', 'از تشخیص گفتار خود گوشی استفاده می‌شود.'); return; }
+  const { state, progress } = whisperState();
+  el.innerHTML = tt('Using in-app recognition (Whisper). ', 'از تشخیص گفتار داخل اپ (Whisper) استفاده می‌شود. ') + (
+    state === 'ready' ? tt('✅ Ready, works offline.', '✅ آماده، آفلاین کار می‌کند.')
+    : state === 'loading' ? tt(`Downloading… ${Math.round(progress * 100)}%`, `در حال دانلود… ${num(Math.round(progress * 100))}٪`)
+    : state === 'error' ? tt('❌ Download failed — check your connection.', '❌ دانلود نشد — اینترنت را چک کن.') + ` <button class="ghost small" data-act="loadwhisper">${tt('Retry', 'دوباره')}</button>`
+    : tt('Needs a one-time download (~40 MB).', 'یک بار دانلود لازم دارد (حدود ۴۰ مگابایت).') + ` <button class="ghost small" data-act="loadwhisper">${tt('Download now', 'الان دانلود کن')}</button>`);
+}
+onWhisperState(() => { if (ui.view === 'track') refreshEngine(); });
 
 function refreshVoiceSelect() {
   const sel = $('#voice'); if (!sel || !ui.lang) return;
@@ -105,9 +129,25 @@ export const actions = {
   jump: el => setPos(+el.dataset.s),
   setpos: () => setPos((+$('#posnum').value || 1) - 1),
   restart: () => setPos(0),
+  loadwhisper: () => { loadWhisper().catch(() => {}); refreshEngine(); },
   speechtest: async () => {
     const out = $('#sptest'), l = ui.lang, sample = langInfo(l).hello;
     unlockAudio();
+    if (engineFor(S.tracks[l]) === 'whisper') {
+      primeAudio();
+      if (whisperState().state !== 'ready') {
+        out.textContent = tt('Downloading in-app speech recognition (once)…', 'در حال دانلود تشخیص گفتار داخل اپ (یک بار)…');
+        try { await loadWhisper(); } catch (e) { out.textContent = tt('❌ Download failed — check your connection.', '❌ دانلود نشد — اینترنت را چک کن.'); return; }
+      }
+      out.innerHTML = `${tt('Say:', 'بگو:')} <b dir="auto">${esc(sample)}</b><br>🎙 ${tt('Listening…', 'در حال گوش دادن…')}`;
+      const rec = await recordUtterance({ maxMs: 9000 });
+      if (rec.error) { out.textContent = rec.error === 'mic-denied' ? tt('❌ Microphone access is off. iPhone: Settings → Safari → Microphone → Allow.', '❌ دسترسی میکروفون خاموش است. آیفون: Settings ← Safari ← Microphone ← Allow.') : '❌ ' + rec.error; return; }
+      if (!rec.heard) { out.textContent = tt('⚠ Heard nothing. Speak louder, closer to the phone.', '⚠ چیزی نشنیدم. بلندتر و نزدیک‌تر به گوشی بگو.'); return; }
+      out.textContent = tt('Checking…', 'در حال بررسی…');
+      const text = await transcribe(rec.pcm, l).catch(() => '');
+      out.innerHTML = text ? `✅ ${tt('Heard:', 'شنیدم:')} <b dir="auto">${esc(text)}</b> <span class="sub">(Whisper)</span>` : tt('⚠ Heard nothing clear. Try again.', '⚠ چیز واضحی نشنیدم. دوباره امتحان کن.');
+      return;
+    }
     out.innerHTML = `${tt('Say:', 'بگو:')} <b dir="auto">${esc(sample)}</b><br>🎙 ${tt('Listening…', 'در حال گوش دادن…')}`;
     const r = await listenOnce(l, 9000, () => false, t => { out.innerHTML = `${tt('Say:', 'بگو:')} <b dir="auto">${esc(sample)}</b><br>🎙 ${esc(t)}`; });
     const diag = `<div class="sub" style="font-size:.78rem;margin-top:4px" dir="ltr">SR:${recognitionSupported() ? 'yes' : 'no'} · app:${(window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone ? 'installed' : 'browser'} · ${esc(navigator.userAgent.replace(/^.*?\(([^)]*)\).*$/, '$1').slice(0, 60))}</div>`;
@@ -133,6 +173,7 @@ export function onChange(ev) {
   if (id === 'voice') { t.voiceURI = ev.target.value; save(); }
   if (id === 'warmup') { t.warmup = ev.target.checked; save(); }
   if (id === 'style') { t.style = ev.target.value; save(); }
+  if (id === 'srEngine') { t.srEngine = ev.target.value; save(); refreshEngine(); }
   if (id === 'micMode') { t.micMode = ev.target.value; save(); }
   if (id === 'afterGreen') { t.afterGreen = ev.target.value; save(); }
   if (id === 'check') { t.check = ev.target.checked; save(); }

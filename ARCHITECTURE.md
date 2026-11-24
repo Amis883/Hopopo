@@ -60,7 +60,7 @@ flowchart TD
 | `core/timeline.js` | Interop: reads the audio generator's timeline (JSON or ID3 `TXXX` inside the MP3) into an audio book |
 | `data/store.js` | App state in `localStorage` with schema migration |
 | `data/books.js` | Book sentences in IndexedDB, in-memory cache, append/import/delete |
-| `services/*` | Thin adapters over Web Speech, pdf.js, JSZip, Tesseract, Claude, and clip playback of recorded MP3s (`audioclip.js`) |
+| `services/*` | Thin adapters over Web Speech, pdf.js, JSZip, Tesseract, Claude, clip playback of recorded MP3s (`audioclip.js`), the microphone recorder (`mic.js`) and on-device Whisper (`whisper.js`) |
 | `i18n.js` | Interface language (EN/FA), RTL switch, localized numbers |
 | `ui/*` | Screens (welcome/onboarding, home, track, import, session); each exports an `actions` map |
 | `sw.js` | Service worker (offline) |
@@ -132,6 +132,8 @@ Recognition comes from the Web Speech API in the learner's language. Scoring ali
 *Lesson learned:* GitHub Pages sends `Cache-Control: max-age=600`, so right after a release the new service worker could pick up the *old* modules from the browser's HTTP cache: the version label changed but the code didn't. The service worker now pre-caches with `cache: 'reload'` and fetches code with `cache: 'no-cache'` (revalidation by ETag), and an end-to-end test reproduces the 10-minute cache to guard against it.
 
 **Leaving a session always works.** Stopping is idempotent and guarded step by step (speech, clip, recognition, wake lock, save). The session pushes a history entry, so the phone's back gesture exits cleanly, and unexpected errors surface as a toast instead of a frozen screen.
+
+**Two recognizers.** Diagnostics from a real iPhone (iOS 18, installed to the home screen) showed `SpeechRecognition` present but never returning words. So the speech check has a second engine: `services/mic.js` records one answer with `getUserMedia` (which does work in installed iOS apps) and a small energy-based voice-activity detector (adaptive noise floor, pre-roll, end after 900 ms of silence). `services/whisper.js` then transcribes it on the device with **Whisper tiny** (multilingual, 8-bit quantized, ~40 MB) via transformers.js and ONNX Runtime WebAssembly. The library ships with the app; the model downloads once from Hugging Face and is cached by the browser, so it works offline afterwards and audio never leaves the phone. `services/engine.js` picks the engine: Whisper on iOS home-screen apps or where the Web Speech API is missing, the phone's recognizer elsewhere, with an automatic switch to Whisper if the phone's recognizer returns nothing twice. The mic is opened per answer and closed right after, so the phone's audio output isn't held in "call" mode while the app speaks. The recorder and Whisper were tested end-to-end in Chromium with a real speech recording as the microphone input.
 
 ### 5.5 Offline (`sw.js`)
 
