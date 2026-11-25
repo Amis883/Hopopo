@@ -8,7 +8,7 @@ import { getBook } from '../data/books.js';
 import { speak, stopSpeaking, unlockAudio, listenOnce, recognitionBlocked, stopListening, recognitionSupported, openListener } from '../services/speech.js';
 import { unlockClips, useAudio, playClip, stopClip } from '../services/audioclip.js';
 import { engineFor } from '../services/engine.js';
-import { primeAudio, requestMic, recordUtterance, micSupported } from '../services/mic.js';
+import { primeAudio, openSessionMic, closeSessionMic, recordUtterance, micSupported } from '../services/mic.js';
 import { loadWhisper, transcribe, whisperState, whisperSpeedMs } from '../services/whisper.js';
 import { PROFILES } from '../core/languages.js';
 import { tt, num, langName, phaseText, weekdays, getUI } from '../i18n.js';
@@ -29,7 +29,8 @@ export async function startSession(l) {
   const t = S.tracks[l], meta = t.books[t.bookId];
   // one tap opens the microphone for the whole session (no button per sentence)
   const engine = engineFor(t);
-  if (t.check && engine === 'whisper' && !isFramed) { primeAudio(); requestMic().catch(() => {}); loadWhisper().catch(() => {}); }
+  // one microphone stream for the whole session: one permission prompt, opened inside the Start tap
+  if (t.check && engine === 'whisper' && !isFramed) { primeAudio(); openSessionMic().catch(() => {}); loadWhisper().catch(() => {}); }
   const listener = t.check && engine === 'phone' && (t.micMode || 'auto') === 'auto' && !isFramed ? openListener(l) : null;
   if (!meta) { if (listener) listener.close(); toast(tt('Add or choose a book first', 'اول یک کتاب اضافه یا انتخاب کن')); return renderTrack(l); }
   const book = await getBook(l, t.bookId);
@@ -321,6 +322,7 @@ async function learnerTurn(st, c, tok) {
       : tt('I didn\'t catch that — no problem, keep going.', 'صدایت را نگرفتم — اشکالی ندارد، ادامه بده.')}</span>`;
     if (R.engine === 'phone' && R.srFails >= 2 && micSupported() && !isFramed) {
       R.engine = 'whisper'; R.srFails = 0;
+      openSessionMic().catch(() => {});
       if (R.listener) { R.listener.close(); R.listener = null; }
       loadWhisper().catch(() => {});
       toast(tt('The phone\'s speech recognition isn\'t hearing you, so I\'m switching to in-app recognition (one-time download ~40 MB).', 'تشخیص گفتار گوشی صدایت را نمی‌گیرد؛ به تشخیص داخل اپ می‌روم (یک بار دانلود حدود ۴۰ مگابایت).'), 7000);
@@ -376,6 +378,7 @@ function finish() {
   if (ui.view !== 'session') return;
   stopAudio(); R.playing = false; wakeLock(false);
   if (R.listener) { R.listener.close(); R.listener = null; }
+  closeSessionMic();
   saveSession(true); renderDone();
 }
 
@@ -410,6 +413,7 @@ export function exitSession() {
   document.getElementById('quitov')?.remove();
   try { stopAudio(); } catch (e) { /* ignore */ }
   try { if (R && R.listener) { R.listener.close(); R.listener = null; } } catch (e) { /* ignore */ }
+  try { closeSessionMic(); } catch (e) { /* ignore */ }
   try { wakeLock(false); } catch (e) { /* ignore */ }
   try { if (R && ui.view === 'session') saveSession(false); } catch (e) { /* ignore */ }
   renderHome();

@@ -38,7 +38,11 @@ export function speak(text, rate, track, onBoundary) {
     u.lang = v ? v.lang : langInfo(track.lang).tts;
     u.rate = Math.max(.5, Math.min(1.6, rate));
     let done = false; const fin = () => { if (done) return; done = true; clearTimeout(to); res(); };
-    const to = setTimeout(fin, (estDur(text, rate, track.lang) * 2.5 + 4) * 1000);
+    const to = setTimeout(fin, (estDur(text, rate, track.lang) * 1.8 + 2) * 1000);
+    // iOS sometimes drops an utterance silently (no start, no end): don't let that stall practice
+    const noStart = setTimeout(() => { if (!started) fin(); }, 2500);
+    let started = false;
+    u.onstart = () => { started = true; clearTimeout(noStart); };
     u.onend = fin; u.onerror = fin;
     u.onboundary = e => { if (onBoundary && e.name !== 'sentence') onBoundary(e.charIndex); };
     current = u; speechSynthesis.speak(u);

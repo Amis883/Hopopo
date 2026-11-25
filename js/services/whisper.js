@@ -44,8 +44,10 @@ export function loadWhisper() {
 export async function transcribe(pcm, lang) {
   await loadWhisper();
   const id = nextId++;
+  // Whisper writes non-speech as [inaudible], (music), *laughs* … — drop those labels
+  const clean = t => String(t || '').replace(/\[[^\]]*\]|\([^)]*\)|\*[^*]*\*|♪/g, ' ').replace(/\s+/g, ' ').trim();
   return new Promise((resolve, reject) => {
-    pending.set(id, { resolve, reject });
+    pending.set(id, { resolve: t => resolve(clean(t)), reject });
     worker.postMessage({ type: 'run', id, pcm, language: langInfo(lang).name.toLowerCase() });
   });
 }
