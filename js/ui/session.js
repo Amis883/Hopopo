@@ -1,15 +1,12 @@
 // The practice session: a step runner over the plan, with speech, the learner's turn, and scoring.
-import { lang as langInfo, isRtl, trackColor, isNoSpace } from '../core/languages.js';
-import { buildPlan, estDur, chunkStart, nextChunkStart, styleOf } from '../core/planner.js';
-import { scoreSpeech, scorePartial, tokens } from '../core/scoring.js';
+import { lang as langInfo, isRtl, trackColor } from '../core/languages.js';
+import { buildPlan, estDur, chunkStart, nextChunkStart } from '../core/planner.js';
+import { scoreSpeech, tokens } from '../core/scoring.js';
 import { dayKey, stats } from '../core/stats.js';
 import { S, save } from '../data/store.js';
 import { getBook } from '../data/books.js';
-import { speak, stopSpeaking, unlockAudio, listenOnce, recognitionBlocked, stopListening, recognitionSupported, openListener } from '../services/speech.js';
+import { speak, stopSpeaking, unlockAudio, listenOnce, recognitionBlocked, stopListening } from '../services/speech.js';
 import { unlockClips, useAudio, playClip, stopClip } from '../services/audioclip.js';
-import { engineFor } from '../services/engine.js';
-import { primeAudio, openSessionMic, closeSessionMic, recordUtterance, micSupported } from '../services/mic.js';
-import { loadWhisper, transcribe, whisperState, whisperSpeedMs } from '../services/whisper.js';
 import { PROFILES } from '../core/languages.js';
 import { tt, num, langName, phaseText, weekdays, getUI } from '../i18n.js';
 import { app, $, esc, toast, ui, isFramed, mmss } from './dom.js';
@@ -27,20 +24,14 @@ const track = () => S.tracks[R.lang];
 export async function startSession(l) {
   unlockAudio(); unlockClips(); // must run synchronously inside the click for iOS
   const t = S.tracks[l], meta = t.books[t.bookId];
-  // one tap opens the microphone for the whole session (no button per sentence)
-  const engine = engineFor(t);
-  // one microphone stream for the whole session: one permission prompt, opened inside the Start tap
-  if (t.check && engine === 'whisper' && !isFramed) { primeAudio(); openSessionMic().catch(() => {}); loadWhisper().catch(() => {}); }
-  const listener = t.check && engine === 'phone' && (t.micMode || 'auto') === 'auto' && !isFramed ? openListener(l) : null;
-  if (!meta) { if (listener) listener.close(); toast(tt('Add or choose a book first', 'اول یک کتاب اضافه یا انتخاب کن')); return renderTrack(l); }
+  if (!meta) { toast(tt('Add or choose a book first', 'اول یک کتاب اضافه یا انتخاب کن')); return renderTrack(l); }
   const book = await getBook(l, t.bookId);
   if (!book) { toast(tt('This book\'s text isn\'t in this browser; import it again.', 'متن این کتاب در این مرورگر پیدا نشد؛ دوباره واردش کن.')); return renderTrack(l); }
   const isAudio = book.kind === 'audio';
   if (isAudio) useAudio(book.audio);
   const plan = buildPlan(t, meta, book.sentences, { wholeSentences: isAudio });
-  if (plan.newCount === 0) { if (listener) listener.close(); toast(tt('You finished this book! 🎉 Add a new one or restart it.', 'این کتاب تمام شد! 🎉 کتاب جدید اضافه کن یا از اول شروع کن.'), 5000); return renderTrack(l); }
-  if (R && R.listener) R.listener.close();
-  R = { lang: l, engine, listener, bookId: t.bookId, book, plan, i: 0, token: 0, playing: false, elapsed: 0, showText: true, scores: [] };
+  if (plan.newCount === 0) { toast(tt('You finished this book! 🎉 Add a new one or restart it.', 'این کتاب تمام شد! 🎉 کتاب جدید اضافه کن یا از اول شروع کن.'), 5000); return renderTrack(l); }
+  R = { lang: l, bookId: t.bookId, book, plan, i: 0, token: 0, playing: false, elapsed: 0, showText: true, scores: [] };
   render(); wakeLock(true);
   // the phone's back gesture / button leaves the session cleanly
   try { history.pushState({ hopopoSession: 1 }, ''); } catch (e) { /* ignore */ }
@@ -58,7 +49,6 @@ function render() {
     <div class="textcard ${/A/.test(t.level) ? 'lvl-a' : ''}" id="textcard" dir="${isRtl(R.lang) ? 'rtl' : 'ltr'}" lang="${L.tts}" style="text-align:start"></div>
     <div class="trans" id="trans" dir="auto"></div>
     <div class="heard" id="heard"></div>
-    <div class="micbox hidden" id="micbox"><button class="play micbtn" data-act="micgo" aria-label="Speak">🎙</button><div class="miclbl">${tt('Tap and say it', 'بزن و بگو')}</div><button class="chip" data-act="micskip">${tt('Skip', 'رد کن')}</button></div>
     <div class="gap" id="gap"><div class="gapbar"><i id="gapfill"></i></div><span id="gaptext">${tt('Your turn — repeat it aloud', 'نوبت توئه — بلند تکرار کن')}</span></div>
     <div class="controls" dir="ltr">
       <button class="icon big" data-act="prev" aria-label="Previous">⏮</button>
@@ -106,7 +96,7 @@ function update() {
   if (ui.view !== 'session') return;
   const st = curStep(), c = R.plan.chunks[st.k], key = st.sec === 'main' ? (st.ph.blind ? 'blind' : st.ph.t) : st.sec;
   const [title, desc] = phaseText(key);
-  $('#phase').innerHTML = `<b>${title}${st.ph.retry ? tt(' — once more', ' — یک بار دیگر') : st.ph.t === 'check' && styleOf(track()) === 'full' ? tt(` (try ${num(st.ph.n)} of ${num(st.ph.of)})`, ` (تلاش ${num(st.ph.n)} از ${num(st.ph.of)})`) : ''}</b><small>${desc}</small>`;
+  $('#phase').innerHTML = `<b>${title}${st.ph.t === 'check' ? tt(` (try ${num(st.ph.n)} of ${num(st.ph.of)})`, ` (تلاش ${num(st.ph.n)} از ${num(st.ph.of)})`) : ''}</b><small>${desc}</small>`;
   const firstNew = R.plan.chunks.length - R.plan.newCount;
   $('#counter').textContent = st.sec === 'review' ? tt('Review', 'مرور')
     : `${st.sec === 'final' ? tt('Continuous pass – ', 'دور پیوسته – ') : ''}${tt(`Chunk ${num(st.k - firstNew + 1)} of ${num(R.plan.newCount)}`, `تکهٔ ${num(st.k - firstNew + 1)} از ${num(R.plan.newCount)}`)}`;
@@ -139,22 +129,7 @@ function showMarks(marks, text) {
   let k = 0; const rank = { ok: 0, close: 1, bad: 2 };
   ws.forEach(s => { const n = tokens(s.textContent, R.lang).length; const part = marks.slice(k, k + n); k += n; const worst = part.reduce((a, x) => rank[x] > rank[a] ? x : a, 'ok'); s.classList.remove('ok', 'close', 'bad'); s.classList.add(worst); });
 }
-/** While the learner speaks: colour the words said so far and highlight the next one. */
-function showLive(c, heardSoFar) {
-  if (isNoSpace(R.lang)) return;
-  const { marks, pos } = scorePartial(c.text, heardSoFar, R.lang);
-  spans().forEach((s, i) => { s.classList.remove('ok', 'close', 'bad', 'hl'); if (marks[i] && marks[i] !== 'pending') s.classList.add(marks[i]); if (i === pos) s.classList.add('hl'); });
-}
-/** Without live words (slow device): move the highlight along with the learner's voice, estimated from speaking time. */
-function showFollow(c, spokenMs, expectedMs) {
-  const ws = spans(); if (!ws.length) return;
-  const i = Math.min(ws.length - 1, Math.floor(ws.length * spokenMs / Math.max(800, expectedMs)));
-  ws.forEach((s, j) => s.classList.toggle('hl', j === i));
-}
 function clearMarks() { spans().forEach(s => s.classList.remove('ok', 'close', 'bad')); const h = $('#heard'); if (h) h.innerHTML = ''; }
-/** Clears the learner's last answer only when the sentence changes, so it stays readable until then. */
-let lastChunk = -1;
-function clearForStep(k) { if (k !== lastChunk) { clearMarks(); lastChunk = k; } else spans().forEach(s => s.classList.remove('ok', 'close', 'bad')); }
 
 function wait(ms, tok, onTick) {
   return new Promise(res => { const t0 = Date.now(); const iv = setInterval(() => { const el = Date.now() - t0; if (onTick) onTick(el / ms); if (!live(tok) || el >= ms) { clearInterval(iv); res(); } }, 50); });
@@ -168,21 +143,16 @@ async function runFrom(i) {
     if (!live(tok)) return;
     commitProgress(); update();
     const st = R.plan.steps[R.i], c = R.plan.chunks[st.k];
-    clearForStep(st.k);
+    clearMarks();
     await voice(c, st.ph.r);
     clearHl();
     if (!live(tok)) return;
     if (st.ph.t === 'check') {
       const green = await learnerTurn(st, c, tok); if (!live(tok)) return;
-      if (green && styleOf(track()) === 'simple') {
-        // good answer: hear the model sentence once more (your answer stays on screen), then the next sentence
-        await wait(150, tok); if (!live(tok)) return;
-        await voice(c, st.ph.r); clearHl(); if (!live(tok)) return;
-      }
       if (green) R.i = afterGreen(R.i);
     }
     if (st.ph.t === 'echo') { await silentGap(c, st, tok); if (!live(tok)) return; }
-    await wait(350, tok);
+    await wait(600, tok);
     if (!live(tok)) return;
     R.i++;
   }
@@ -201,7 +171,7 @@ async function silentGap(c, st, tok) {
  * phones often fail to pick up speech, and marking the learner wrong for that is discouraging and wrong.
  * After 3 failed turns in a row the check is switched off for the rest of the session.
  */
-const GREEN = 80; // score at which a sentence counts as said correctly
+const GREEN = 85; // score at which a sentence counts as said correctly
 
 /**
  * What happens after a green check (track setting `afterGreen`):
@@ -210,109 +180,26 @@ const GREEN = 80; // score at which a sentence counts as said correctly
  *  'repeat'           – skip nothing
  * Returns the index of the last step to skip (the runner then advances by one).
  */
-function greenMode() { const t = track(); if (styleOf(t) === 'simple') return 'next'; return t.afterGreen || (t.skipOnGreen === false ? 'repeat' : 'shadow'); }
+function greenMode() { const t = track(); return t.afterGreen || (t.skipOnGreen === false ? 'repeat' : 'shadow'); }
 function afterGreen(i) {
   const steps = R.plan.steps, mode = greenMode();
   if (mode === 'next') return nextChunkStart(steps, i) - 1;
   if (mode === 'shadow') { const { k, sec } = steps[i]; while (steps[i + 1] && steps[i + 1].k === k && steps[i + 1].sec === sec && steps[i + 1].ph.t === 'check') i++; }
   return i;
 }
-/**
- * In-app recognition turn: record one answer (VAD), then transcribe with Whisper on the device.
- * Returns {text, error} like the phone recognizer, 'notready' while the model is still downloading,
- * or null when the microphone is unavailable.
- */
-async function whisperTurn(c, maxMs, tok, onLive) {
-  const ws = whisperState();
-  if (ws.state !== 'ready') {
-    loadWhisper().catch(() => {});
-    $('#heard').innerHTML = `<span class="lbl">${ws.state === 'error'
-      ? tt('In-app speech recognition couldn\'t be downloaded (check your connection). Repeat aloud for now.', 'دانلود تشخیص گفتار داخل اپ ممکن نشد (اینترنت را چک کن). فعلاً بلند تکرار کن.')
-      : tt(`Preparing in-app speech recognition… ${Math.round(ws.progress * 100)}% — repeat aloud for now.`, `در حال آماده‌سازی تشخیص گفتار داخل اپ… ${num(Math.round(ws.progress * 100))}٪ — فعلاً بلند تکرار کن.`)}</span>`;
-    return 'notready';
-  }
-  const g = $('#gap'), gt = $('#gaptext');
-  gt.textContent = tt('🎙 Now say it… I\'m listening', '🎙 حالا بگو… گوش می‌دهم'); gt.classList.add('listening'); $('#gapfill').style.width = '100%'; g.classList.add('on');
-  // live updates while speaking: re-transcribe the audio so far about once a second, if this phone is fast enough
-  const liveOk = whisperSpeedMs() < (window.__liveLimitMs || 1500), expectedMs = voiceDur(c, 1) * 1000;
-  let inflight = null, lastPartial = null, lastAt = 0;
-  const onSpeech = (soFar, ms) => {
-    if (!liveOk) { showFollow(c, ms, expectedMs); return; }
-    if (inflight || ms - lastAt < 900) return;
-    lastAt = ms; const pcm = soFar();
-    inflight = transcribe(pcm, R.lang).then(t => { if (t && live(tok)) { lastPartial = { text: t, len: pcm.length }; onLive(t); } }).catch(() => {}).finally(() => { inflight = null; });
-  };
-  const rec = await recordUtterance({ maxMs: Math.min(maxMs, 15000), silenceMs: 750, isCancelled: () => !live(tok), onSpeech });
-  g.classList.remove('on'); gt.classList.remove('listening'); gt.textContent = tt('Your turn — repeat it aloud', 'نوبت توئه — بلند تکرار کن');
-  if (!live(tok)) return { text: '', error: null };
-  if (rec.error) return rec.error === 'mic-denied' ? null : { text: '', error: rec.error };
-  if (!rec.heard) return { text: '', error: null };
-  if (inflight) await inflight;
-  // the last live result already covers (almost) the whole answer: use it instead of transcribing again
-  if (lastPartial && lastPartial.len >= rec.pcm.length * 0.9) return { text: lastPartial.text, error: null };
-  if (!lastPartial) $('#heard').innerHTML = `<span class="lbl">${tt('Checking…', 'در حال بررسی…')}</span>`;
-  try { const text = await transcribe(rec.pcm, R.lang); if (text) onLive(text); return { text, error: null }; }
-  catch (e) { return { text: '', error: 'asr-failed' }; }
-}
-
-/** iPhone/iPad: Safari only opens the microphone for speech recognition from a tap. */
-const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-/** 'tap' = learner taps 🎙 to answer (needed on iOS); 'auto' = listen right after the sentence. */
-const micMode = () => track().micMode || 'auto';
-
-/**
- * Tap mode: show a big 🎙 button and wait. The tap handler (actions.micgo) starts recognition
- * synchronously inside the tap, which is what iOS requires; it hands the listening promise back here.
- * Resolves with the listen result, or 'skip' / 'timeout'.
- */
-function waitForTap(maxMs, tok, onLive, waitMs) {
-  return new Promise(res => {
-    let done = false;
-    const end = v => { if (done) return; done = true; clearTimeout(to); clearInterval(watch); R.micWait = null; res(v); };
-    const to = setTimeout(() => end('timeout'), waitMs);
-    const watch = setInterval(() => { if (!live(tok)) end('cancel'); }, 100);
-    R.micWait = {
-      listening: false,
-      start: () => { clearTimeout(to); R.micWait.listening = true; listenOnce(R.lang, maxMs, () => !live(tok), onLive).then(end); },
-      skip: () => { if (R.micWait && R.micWait.listening) stopListening(); end('skip'); },
-    };
-  });
-}
-
 async function learnerTurn(st, c, tok) {
   if (R.noCheck) return silentGap(c, st, tok);
-  const dur = voiceDur(c, st.ph.r), g = $('#gap'), gt = $('#gaptext'), hd = $('#heard'), mic = $('#micbox');
-  const onLive = t => { hd.innerHTML = `<span class="lbl">${tt('I heard: ', 'شنیدم: ')}</span><span class="txt">${esc(t)}</span>`; showLive(c, t); };
-  const maxMs = (dur * 1.8 + 5) * 1000;
-  let heard;
-  if (R.engine === 'whisper') heard = await whisperTurn(c, maxMs, tok, onLive);
-  else if (!recognitionSupported() || recognitionBlocked()) heard = null;      // no recognition here: don't show a dead button
-  else if (micMode() === 'tap') {
-    mic.classList.remove('hidden');
-    const r = await waitForTap(maxMs, tok, t => { mic.querySelector('.miclbl').textContent = tt('Listening…', 'در حال گوش دادن…'); onLive(t); }, (dur * 3 + 12) * 1000);
-    mic.classList.add('hidden'); mic.querySelector('.miclbl').textContent = tt('Tap and say it', 'بزن و بگو');
-    const btn = mic.querySelector('.micbtn'); btn.classList.remove('recording'); btn.textContent = '🎙';
-    if (!live(tok) || r === 'cancel') return;
-    if (r === 'skip' || r === 'timeout') { hd.innerHTML = `<span class="lbl">${tt('Skipped', 'رد شد')}</span>`; await wait(500, tok); return; }
-    heard = r;
-  } else {
-    await wait(300, tok); if (!live(tok)) return;   // let the speaker audio release
-    gt.textContent = tt('🎙 Now say it… I\'m listening', '🎙 حالا بگو… گوش می‌دهم'); gt.classList.add('listening'); $('#gapfill').style.width = '100%'; g.classList.add('on');
-    if (R.listener && R.listener.alive()) heard = await R.listener.capture(R.listener.mark(), maxMs, () => !live(tok), onLive);
-    if (heard === undefined || (heard === null && live(tok) && !recognitionBlocked())) {
-      if (R.listener && !R.listener.alive()) { R.listener.close(); R.listener = null; }   // the session mic died: listen per sentence
-      heard = await listenOnce(R.lang, maxMs, () => !live(tok), onLive);
-    }
-    g.classList.remove('on'); gt.classList.remove('listening'); gt.textContent = tt('Your turn — repeat it aloud', 'نوبت توئه — بلند تکرار کن');
-    if (!live(tok)) return;
-  }
-  if (heard === 'notready') return silentGap(c, st, tok);
+  const dur = voiceDur(c, st.ph.r), g = $('#gap'), gt = $('#gaptext'), hd = $('#heard');
+  await wait(300, tok); if (!live(tok)) return;   // let the speaker audio release before the mic opens (iOS)
+  gt.textContent = tt('🎙 Now say it… I\'m listening', '🎙 حالا بگو… گوش می‌دهم'); gt.classList.add('listening'); $('#gapfill').style.width = '100%'; g.classList.add('on');
+  const heard = await listenOnce(R.lang, (dur * 1.8 + 5) * 1000, () => !live(tok), t => { hd.innerHTML = `<span class="lbl">${tt('I heard: ', 'شنیدم: ')}</span><span class="txt">${esc(t)}</span>`; });
+  g.classList.remove('on'); gt.classList.remove('listening'); gt.textContent = tt('Your turn — repeat it aloud', 'نوبت توئه — بلند تکرار کن');
+  if (!live(tok)) return;
   if (heard === null) {
     R.noCheck = true;
-    toast(R.engine === 'whisper' ? tt('Microphone access is off for this app. iPhone: Settings → Safari (or the app) → Microphone → Allow. Continuing with repeat pauses.', 'دسترسی میکروفون برای این اپ خاموش است. آیفون: Settings ← Safari ← Microphone ← Allow. با مکث برای تکرار ادامه می‌دهیم.')
-      : recognitionBlocked() ? tt('Microphone or speech recognition is not allowed. iPhone: Settings → Siri → turn on Siri & Dictation, and allow the microphone for Safari. Continuing with repeat pauses.', 'میکروفون یا تشخیص گفتار اجازه ندارد. آیفون: Settings ← Siri ← Siri & Dictation را روشن کن و اجازهٔ میکروفون Safari را بده. با مکث برای تکرار ادامه می‌دهیم.')
+    toast(recognitionBlocked() ? tt('Microphone permission was denied; continuing with repeat pauses.', 'اجازهٔ میکروفون داده نشد؛ با مکث برای تکرار ادامه می‌دهیم.')
       : isFramed ? tt('The speech check only works in the installed app; here you just get a pause to repeat.', 'بررسی گفتار فقط در نسخهٔ نصب‌شدهٔ اپ کار می‌کند؛ اینجا فقط فرصت تکرار داری.')
-      : tt('This browser has no speech recognition; continuing with repeat pauses.', 'این مرورگر تشخیص گفتار ندارد؛ با مکث برای تکرار ادامه می‌دهیم.'), 8000);
+      : tt('This browser has no speech recognition; continuing with repeat pauses.', 'این مرورگر تشخیص گفتار ندارد؛ با مکث برای تکرار ادامه می‌دهیم.'), 5500);
     return silentGap(c, st, tok);
   }
   if (!heard.text) {
@@ -320,29 +207,23 @@ async function learnerTurn(st, c, tok) {
     hd.innerHTML = `<span class="lbl">${heard.error
       ? tt(`The phone couldn't listen (${esc(heard.error)}).`, `گوشی نتوانست گوش بدهد (${esc(heard.error)}).`)
       : tt('I didn\'t catch that — no problem, keep going.', 'صدایت را نگرفتم — اشکالی ندارد، ادامه بده.')}</span>`;
-    if (R.engine === 'phone' && R.srFails >= 2 && micSupported() && !isFramed) {
-      R.engine = 'whisper'; R.srFails = 0;
-      openSessionMic().catch(() => {});
-      if (R.listener) { R.listener.close(); R.listener = null; }
-      loadWhisper().catch(() => {});
-      toast(tt('The phone\'s speech recognition isn\'t hearing you, so I\'m switching to in-app recognition (one-time download ~40 MB).', 'تشخیص گفتار گوشی صدایت را نمی‌گیرد؛ به تشخیص داخل اپ می‌روم (یک بار دانلود حدود ۴۰ مگابایت).'), 7000);
-    } else if (R.srFails >= 3) {
+    if (R.srFails >= 3) {
       R.noCheck = true;
-      toast(tt('Speech check isn\'t picking you up on this phone, so it\'s off for this session (you still get a pause to repeat). If you want it, choose "Tap 🎙, then speak" in Book & settings.', 'بررسی گفتار روی این گوشی صدایت را نمی‌گیرد، برای همین در این جلسه خاموش شد (مکث برای تکرار می‌ماند). اگر خواستی، در «کتاب و تنظیمات» گزینهٔ «بزن 🎙 و بعد بگو» را انتخاب کن.'), 7000);
+      toast(tt('Speech check isn\'t picking you up on this phone, so it\'s off for this session. Try "Test the speech check" in Book & settings.', 'بررسی گفتار روی این گوشی صدایت را نمی‌گیرد، برای همین در این جلسه خاموش شد. در «کتاب و تنظیمات» دکمهٔ «تست بررسی گفتار» را امتحان کن.'), 7000);
     }
     await wait(1400, tok);
     return;
   }
   R.srFails = 0;
   const res = scoreSpeech(c.text, heard.text, R.lang);
-  clearHl(); showMarks(res.marks, c.text);
+  showMarks(res.marks, c.text);
   const col = res.score >= GREEN ? 'var(--ok)' : res.score >= 60 ? 'var(--de)' : 'var(--danger)';
   hd.innerHTML = `<span class="lbl">${tt('I heard: ', 'شنیدم: ')}</span><span class="txt">${esc(heard.text)}</span><span class="score" style="background:${col}">${num(res.score)}${tt('%', '٪')}</span>`;
   R.scores.push({ k: st.k, score: res.score });
   const green = res.score >= GREEN;
   const mode = greenMode();
-  if (green && mode !== 'repeat') hd.insertAdjacentHTML('beforeend', `<div class="lbl" style="margin-top:4px">✅ ${styleOf(track()) === 'simple' ? tt('Great — listen once more, then the next sentence', 'عالی — یک بار دیگر گوش بده، بعد جملهٔ بعد') : mode === 'next' ? tt('Great — next sentence', 'عالی — جملهٔ بعد') : tt('Great — now speak along', 'عالی — حالا همزمان بخوان')}</div>`);
-  await wait(green ? (styleOf(track()) === 'simple' ? 300 : 1300) : 1800, tok);
+  if (green && mode !== 'repeat') hd.insertAdjacentHTML('beforeend', `<div class="lbl" style="margin-top:4px">✅ ${mode === 'next' ? tt('Great — next sentence', 'عالی — جملهٔ بعد') : tt('Great — now speak along', 'عالی — حالا همزمان بخوان')}</div>`);
+  await wait(green ? 1300 : 2800, tok);
   return green;
 }
 
@@ -377,8 +258,6 @@ function saveSession(complete) {
 function finish() {
   if (ui.view !== 'session') return;
   stopAudio(); R.playing = false; wakeLock(false);
-  if (R.listener) { R.listener.close(); R.listener = null; }
-  closeSessionMic();
   saveSession(true); renderDone();
 }
 
@@ -412,8 +291,6 @@ function againFinal() {
 export function exitSession() {
   document.getElementById('quitov')?.remove();
   try { stopAudio(); } catch (e) { /* ignore */ }
-  try { if (R && R.listener) { R.listener.close(); R.listener = null; } } catch (e) { /* ignore */ }
-  try { closeSessionMic(); } catch (e) { /* ignore */ }
   try { wakeLock(false); } catch (e) { /* ignore */ }
   try { if (R && ui.view === 'session') saveSession(false); } catch (e) { /* ignore */ }
   renderHome();
@@ -487,14 +364,6 @@ export const actions = {
   next: () => { const i = nextChunkStart(R.plan.steps, R.i); stopAudio(); if (i >= R.plan.steps.length) { R.i = i; finish(); } else runFrom(i); },
   prev: () => { let s = chunkStart(R.plan.steps, R.i); if (R.i === s && s > 0) s = chunkStart(R.plan.steps, s - 1); stopAudio(); runFrom(s); },
   toggletext: () => { R.showText = !R.showText; update(); },
-  micgo: el => {
-    if (!R || !R.micWait) return;
-    if (R.micWait.listening) { stopListening(); return; }        // second tap = "I'm done"
-    R.micWait.start();                                           // must start inside the tap (iOS)
-    el.classList.add('recording'); el.textContent = '⏹';
-    const lbl = $('#micbox .miclbl'); if (lbl) lbl.textContent = tt('🔴 Listening… speak now, tap ⏹ when done', '🔴 در حال گوش دادن… حالا بگو، تمام شد ⏹ را بزن');
-  },
-  micskip: () => { if (R && R.micWait) R.micWait.skip(); },
   rec: () => toggleRec(),
   playrec: () => playRec(),
   closelookup: () => $('#lookup').classList.add('hidden'),

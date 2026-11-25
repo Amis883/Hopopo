@@ -8,7 +8,6 @@ import * as track from './ui/track.js';
 import * as importFlow from './ui/importFlow.js';
 import * as session from './ui/session.js';
 import * as welcome from './ui/welcome.js';
-import * as help from './ui/help.js';
 
 setUI(S.ui || 'en');
 
@@ -16,12 +15,11 @@ setUI(S.ui || 'en');
  * Event delegation: every interactive element carries data-act="name"; each view module
  * exports an `actions` map. One listener per event type for the whole app.
  */
-const actions = { ...home.actions, ...track.actions, ...importFlow.actions, ...session.actions, ...welcome.actions, ...help.actions };
+const actions = { ...home.actions, ...track.actions, ...importFlow.actions, ...session.actions, ...welcome.actions };
 
 document.addEventListener('click', ev => {
   if (session.onTextClick(ev)) return;
   const el = ev.target.closest('[data-act]'); if (!el) return;
-  if (el.tagName === 'A') ev.preventDefault();
   const fn = actions[el.dataset.act]; if (!fn) return;
   try { const r = fn(el, ev); if (r && r.catch) r.catch(reportError); } catch (e) { reportError(e); }
 });

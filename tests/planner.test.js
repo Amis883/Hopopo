@@ -6,17 +6,8 @@ import { newTrack } from '../js/data/store.js';
 const sentences = Array.from({ length: 200 }, (_, i) => `Das ist Satz Nummer ${i} in meinem Buch.`);
 const meta = (pos = 0, last = null) => ({ pos, last, total: sentences.length });
 
-test('simple style: read once and say it, with one retry', () => {
-  const t = newTrack('de', 'A1');
-  assert.deepEqual(phasesFor(t).map(p => p.t + (p.retry ? '-retry' : '')), ['check', 'check-retry']);
-  assert.deepEqual(phasesFor({ ...t, check: false }).map(p => p.t), ['echo']);
-  const p = buildPlan(t, meta(), sentences);
-  assert.ok(!p.steps.some(s => s.sec === 'final'), 'no continuous pass by default');
-  assert.ok(buildPlan({ ...t, finalPass: true }, meta(), sentences).steps.some(s => s.sec === 'final'));
-});
-
-test('full style: speech check replaces echo phases with N checked repeats', () => {
-  const t = { ...newTrack('de', 'A1'), style: 'full', check: true, checkReps: 2 };
+test('speech check replaces echo phases with N checked repeats', () => {
+  const t = { ...newTrack('de', 'A1'), check: true, checkReps: 2 };
   assert.deepEqual(phasesFor(t).map(p => p.t), ['listen', 'check', 'check', 'shadow', 'shadow']);
   assert.deepEqual(phasesFor({ ...t, check: false }).map(p => p.t), ['listen', 'echo', 'echo', 'shadow', 'shadow']);
 });
@@ -37,27 +28,18 @@ test('longer budget → more material', () => {
   assert.ok(b.newCount > a.newCount);
 });
 
-test('by default the session starts exactly at the saved sentence (no review)', () => {
-  const p = buildPlan(newTrack('de', 'A1'), meta(40, [30, 40]), sentences);
-  assert.equal(p.steps[0].sec, 'main');
-  assert.equal(p.chunks[p.steps[0].k].sent, 40);
-});
-
-test('with warm-up on, the plan reviews the last session first', () => {
-  const t = { ...newTrack('de', 'A1'), warmup: true };
+test('plan continues from the saved position and warms up with the last session', () => {
+  const t = newTrack('de', 'A1');
   const p = buildPlan(t, meta(40, [30, 40]), sentences);
   assert.equal(p.start, 40);
   assert.equal(p.steps[0].sec, 'review');
   assert.deepEqual([...new Set(p.steps.filter(s => s.sec === 'review').map(s => p.chunks[s.k].sent))], [38, 39]);
-  assert.equal(buildPlan({ ...t, style: 'full' }, meta(40, [30, 40]), sentences).steps.at(-1).sec, 'final');
+  assert.equal(p.steps.at(-1).sec, 'final');
 });
 
 test('chunk navigation helpers', () => {
-  const simple = buildPlan(newTrack('de', 'A1'), meta(), sentences);
-  assert.equal(chunkStart(simple.steps, 1), 0);
-  assert.equal(simple.steps[nextChunkStart(simple.steps, 0)].k, 1);
-  const p = buildPlan({ ...newTrack('de', 'A1'), style: 'full' }, meta(), sentences);
-  const i = 3; // inside the first chunk's phases (full style: 5 steps per chunk)
+  const p = buildPlan(newTrack('de', 'A1'), meta(), sentences);
+  const i = 3; // inside the first chunk's phases
   assert.equal(chunkStart(p.steps, i), 0);
   assert.equal(p.steps[nextChunkStart(p.steps, i)].k, 1);
 });

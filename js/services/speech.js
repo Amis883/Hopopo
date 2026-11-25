@@ -38,11 +38,7 @@ export function speak(text, rate, track, onBoundary) {
     u.lang = v ? v.lang : langInfo(track.lang).tts;
     u.rate = Math.max(.5, Math.min(1.6, rate));
     let done = false; const fin = () => { if (done) return; done = true; clearTimeout(to); res(); };
-    const to = setTimeout(fin, (estDur(text, rate, track.lang) * 1.8 + 2) * 1000);
-    // iOS sometimes drops an utterance silently (no start, no end): don't let that stall practice
-    const noStart = setTimeout(() => { if (!started) fin(); }, 2500);
-    let started = false;
-    u.onstart = () => { started = true; clearTimeout(noStart); };
+    const to = setTimeout(fin, (estDur(text, rate, track.lang) * 2.5 + 4) * 1000);
     u.onend = fin; u.onerror = fin;
     u.onboundary = e => { if (onBoundary && e.name !== 'sentence') onBoundary(e.charIndex); };
     current = u; speechSynthesis.speak(u);
@@ -104,63 +100,4 @@ export function listenOnce(lang, maxMs, isCancelled, onLive) {
     active = finish;
     start();
   });
-}
-
-/**
- * Session listener: one continuous recognition session opened by the tap that starts practice
- * (iOS only grants the microphone to speech recognition from a user gesture) and kept open, so
- * the learner never has to tap per sentence. Results arriving while the app itself speaks are
- * ignored by marking where the learner's turn begins. If the phone ends the session it is
- * restarted; if restarts keep failing, alive() turns false and the caller falls back.
- */
-export function openListener(lang) {
-  if (!SR || blocked) return null;
-  const segs = [];               // {t, at} — every result heard in this session, across restarts
-  let r = null, base = 0, alive = false, closed = false, quickEnds = 0, startedAt = 0;
-  const start = () => {
-    try { r = new SR(); } catch (e) { return false; }
-    r.lang = langInfo(lang).tts; r.continuous = true; r.interimResults = true; r.maxAlternatives = 1;
-    r.onstart = () => { alive = true; };
-    r.onresult = e => {
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const t = e.results[i][0].transcript, k = base + i;
-        if (!segs[k] || segs[k].t !== t) segs[k] = { t, at: Date.now() };
-      }
-    };
-    r.onerror = e => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { blocked = true; closed = true; alive = false; } };
-    r.onend = () => {
-      alive = false;
-      if (closed) return;
-      quickEnds = Date.now() - startedAt < 1500 ? quickEnds + 1 : 0;
-      if (quickEnds >= 3) { closed = true; return; }          // the phone won't keep it open
-      base = segs.length;
-      setTimeout(() => { if (!closed) { startedAt = Date.now(); try { r.start(); alive = true; } catch (e) { closed = true; } } }, 120);
-    };
-    startedAt = Date.now();
-    try { r.start(); alive = true; } catch (e) { return false; }
-    return true;
-  };
-  if (!start()) return null;
-  return {
-    alive: () => alive && !closed,
-    /** Index from which the learner's answer starts. */
-    mark: () => segs.length,
-    /** Waits for the learner to speak after `mark()`; resolves {text, error} like listenOnce, or null if the session died. */
-    capture(from, maxMs, isCancelled, onLive) {
-      return new Promise(res => {
-        const t0 = Date.now();
-        const iv = setInterval(() => {
-          const mine = segs.slice(from).filter(Boolean);
-          const text = mine.map(s => s.t).join(' ').replace(/\s+/g, ' ').trim();
-          const last = mine.reduce((a, s) => Math.max(a, s.at), 0);
-          if (text && onLive) onLive(text);
-          const done = isCancelled() || (text && Date.now() - last > 1200) || Date.now() - t0 > maxMs || closed;
-          if (!done) return;
-          clearInterval(iv);
-          if (!text && closed) res(null); else res({ text, error: null });
-        }, 100);
-      });
-    },
-    close() { closed = true; alive = false; try { if (r) r.abort(); } catch (e) { /* ignore */ } },
-  };
 }

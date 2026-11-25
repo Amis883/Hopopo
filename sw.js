@@ -1,14 +1,14 @@
 // Offline support. App shell is pre-cached; everything else (OCR engine, language data, fonts)
 // is cached on first use. Pages are network-first so new versions arrive; assets are cache-first.
 // RELEASE: bump VERSION on every deploy. A changed sw.js is how installed apps learn there is an update.
-const VERSION = '2.9.1';   // keep equal to js/version.js
+const VERSION = '2.3.2';   // = v2.3.1 restored, plus the update fix below
 const CACHE = 'hopopo-' + VERSION;
 const SHELL = ['./', './index.html', './manifest.webmanifest', './css/app.css',
-  './js/main.js', './js/i18n.js', './js/version.js',
+  './js/main.js', './js/i18n.js',
   './js/core/languages.js', './js/core/text.js', './js/core/planner.js', './js/core/scoring.js', './js/core/stats.js', './js/core/packs.js', './js/core/timeline.js',
   './js/data/store.js', './js/data/books.js',
-  './js/services/speech.js', './js/services/importers.js', './js/services/ocr.js', './js/services/claude.js', './js/services/audioclip.js', './js/services/engine.js', './js/services/mic.js', './js/services/whisper.js', './js/services/whisper.worker.js',
-  './js/ui/dom.js', './js/ui/welcome.js', './js/ui/help.js', './js/ui/home.js', './js/ui/track.js', './js/ui/importFlow.js', './js/ui/session.js',
+  './js/services/speech.js', './js/services/importers.js', './js/services/ocr.js', './js/services/claude.js', './js/services/audioclip.js',
+  './js/ui/dom.js', './js/ui/welcome.js', './js/ui/home.js', './js/ui/track.js', './js/ui/importFlow.js', './js/ui/session.js',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
 
 // cache: 'reload' bypasses the browser's HTTP cache, so a new version never pre-caches old files

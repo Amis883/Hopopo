@@ -3,9 +3,6 @@ import { PROFILES, LEVELS, lang as langInfo, isRtl, trackColor } from '../core/l
 import { S, save, removeTrack } from '../data/store.js';
 import { getBook, deleteBook, forgetBooks } from '../data/books.js';
 import { voicesFor, voiceFor, onVoicesChanged, speak, unlockAudio, recognitionSupported, listenOnce, recognitionBlocked } from '../services/speech.js';
-import { engineFor } from '../services/engine.js';
-import { primeAudio, recordUtterance } from '../services/mic.js';
-import { loadWhisper, transcribe, whisperState, onWhisperState } from '../services/whisper.js';
 import { tt, num, langName, getUI } from '../i18n.js';
 import { app, $, esc, toast, ui, isFramed, confirmTap as confirmed } from './dom.js';
 import { importPanel } from './importFlow.js';
@@ -30,7 +27,7 @@ export async function renderTrack(l) {
     : isFramed ? tt('The speech check only works in the installed version; here you get a pause to repeat instead.', 'بررسی گفتار فقط در نسخهٔ نصب‌شده کار می‌کند؛ اینجا به‌جایش فرصت تکرار داری.')
     : tt('Asks for microphone permission the first time.', 'بار اول اجازهٔ میکروفون می‌خواهد.');
   app.innerHTML = `<div style="--acc:${trackColor(l, S.order.indexOf(l))}">
-  <header class="top"><button class="icon" data-act="home" aria-label="Back">${tt('←', '→')}</button><h2 style="flex:1">${langName(l)}${L.native !== langName(l) ? ' – ' + esc(L.native) : ''}</h2><button class="langbtn" data-act="help" aria-label="${tt('Guide', 'راهنما')}">❓</button></header>
+  <header class="top"><button class="icon" data-act="home" aria-label="Back">${tt('←', '→')}</button><h2>${langName(l)}${L.native !== langName(l) ? ' – ' + esc(L.native) : ''}</h2></header>
   <section class="card"><h3>${tt('Books', 'کتاب‌ها')}</h3>
     ${books.length ? books.map(([id, b]) => `<div class="bookitem ${id === t.bookId ? 'active' : ''}">
       <button data-act="selbook" data-id="${id}">${b.kind === 'audio' ? '🎧 ' : ''}<bdi>${esc(b.title)}</bdi><small>${tt(`${num(b.pos)} of ${num(b.total || 0)} sentences`, `${num(b.pos)} از ${num(b.total || 0)} جمله`)}</small></button>
@@ -45,10 +42,6 @@ export async function renderTrack(l) {
     <div class="row" style="margin-top:8px"><label>${tt('Sentence #', 'جملهٔ شمارهٔ')}</label><input type="number" id="posnum" min="1" max="${meta.total || 1}" value="${meta.pos + 1}"><button class="ghost small" data-act="setpos">${tt('Go', 'برو')}</button><button class="ghost small" data-act="restart">${tt('Restart', 'از اول')}</button></div>
   </section>` : ''}
   <section class="card"><h3>${tt(`${langName(l)} settings`, `تنظیمات ${langName(l)}`)}</h3>
-    <div class="field"><span>${tt('Practice style', 'روش تمرین')}</span><select id="style">${[
-      ['simple', tt('Simple: hear it once → say it → next (one retry if below 80%)', 'ساده: یک بار بشنو ← بگو ← بعدی (زیر ۸۰٪ یک بار دیگر)')],
-      ['full', tt('Full shadowing: listen, repeat, speak along, continuous pass', 'شادوینگ کامل: گوش، تکرار، همزمان‌خوانی، دور پیوسته')],
-    ].map(([v, label]) => `<option value="${v}" ${(t.style || 'simple') === v ? 'selected' : ''}>${label}</option>`).join('')}</select></div>
     <div class="field"><span>${tt('My level', 'سطح من')}</span><select id="level">${LEVELS.map(k => `<option ${k === t.level ? 'selected' : ''}>${k}</option>`).join('')}</select></div>
     <div class="field"><span>${tt('Session length', 'مدت هر جلسه')} <output id="minout">${tt(`${num(t.minutes)} min`, `${num(t.minutes)} دقیقه`)}</output></span><input type="range" id="minutes" min="10" max="20" step="1" value="${t.minutes}"></div>
     <div class="field"><span>${tt('Voice speed', 'سرعت صدا')} <output id="spout">×${num(t.speed)}</output></span><input type="range" id="speed" min="0.7" max="1.3" step="0.05" value="${t.speed}"></div>
@@ -58,16 +51,6 @@ export async function renderTrack(l) {
       <div class="msg">${speechNote}</div>
       <button class="ghost small" style="margin-top:6px" data-act="speechtest">🎙 ${tt('Test the speech check', 'تست بررسی گفتار')}</button>
       <div class="sptest" id="sptest"></div></div>
-    <div class="field"><span>🧠 ${tt('Speech recognition', 'تشخیص گفتار')}</span><select id="srEngine">${[
-      ['auto', tt('Automatic (recommended)', 'خودکار (پیشنهادی)')],
-      ['whisper', tt('In-app (Whisper) — works on iPhone home-screen apps, offline after one download', 'داخل اپ (Whisper) — در اپ نصب‌شدهٔ آیفون کار می‌کند، بعد از یک بار دانلود آفلاین')],
-      ['phone', tt("Phone's built-in (Siri / Google)", 'خود گوشی (Siri / Google)')],
-    ].map(([v, label]) => `<option value="${v}" ${(t.srEngine || 'auto') === v ? 'selected' : ''}>${label}</option>`).join('')}</select>
-      <div class="msg" id="engmsg"></div></div>
-    <div class="field"><span>🎙 ${tt('How to answer', 'نحوهٔ جواب دادن')}</span><select id="micMode">${[
-      ['auto', tt('Hands-free: listen automatically (recommended)', 'بدون دکمه: خودکار گوش بده (پیشنهادی)')],
-      ['tap', tt('Tap 🎙 before speaking', 'قبل از گفتن 🎙 را بزن')],
-    ].map(([v, label]) => `<option value="${v}" ${(t.micMode || 'auto') === v ? 'selected' : ''}>${label}</option>`).join('')}</select></div>
     <div class="field"><span>✅ ${tt('When a sentence turns green', 'وقتی جمله سبز شد')}</span><select id="afterGreen">${[
       ['shadow', tt('Skip the 2nd check, still shadow it (recommended)', 'تلاش دوم رد شود، ولی همزمان‌خوانی بماند (پیشنهادی)')],
       ['next', tt('Go straight to the next sentence', 'مستقیم برو جملهٔ بعد')],
@@ -78,22 +61,7 @@ export async function renderTrack(l) {
     <button class="ghost small danger" style="margin-top:12px" data-act="removelang">${tt(`Remove ${langName(l)}`, `حذف ${langName(l)}`)}</button>
   </section></div>`;
   refreshVoiceSelect();
-  refreshEngine();
 }
-
-/** Shows which recognizer is in use and the in-app model's download state. */
-function refreshEngine() {
-  const el = $('#engmsg'); if (!el || !ui.lang) return;
-  const eng = engineFor(S.tracks[ui.lang]);
-  if (eng === 'phone') { el.innerHTML = tt('Using the phone\'s built-in recognition.', 'از تشخیص گفتار خود گوشی استفاده می‌شود.'); return; }
-  const { state, progress } = whisperState();
-  el.innerHTML = tt('Using in-app recognition (Whisper). ', 'از تشخیص گفتار داخل اپ (Whisper) استفاده می‌شود. ') + (
-    state === 'ready' ? tt('✅ Ready, works offline.', '✅ آماده، آفلاین کار می‌کند.')
-    : state === 'loading' ? tt(`Downloading… ${Math.round(progress * 100)}%`, `در حال دانلود… ${num(Math.round(progress * 100))}٪`)
-    : state === 'error' ? tt('❌ Download failed — check your connection.', '❌ دانلود نشد — اینترنت را چک کن.') + ` <button class="ghost small" data-act="loadwhisper">${tt('Retry', 'دوباره')}</button>`
-    : tt('Needs a one-time download (~40 MB).', 'یک بار دانلود لازم دارد (حدود ۴۰ مگابایت).') + ` <button class="ghost small" data-act="loadwhisper">${tt('Download now', 'الان دانلود کن')}</button>`);
-}
-onWhisperState(() => { if (ui.view === 'track') refreshEngine(); });
 
 function refreshVoiceSelect() {
   const sel = $('#voice'); if (!sel || !ui.lang) return;
@@ -129,32 +97,14 @@ export const actions = {
   jump: el => setPos(+el.dataset.s),
   setpos: () => setPos((+$('#posnum').value || 1) - 1),
   restart: () => setPos(0),
-  loadwhisper: () => { loadWhisper().catch(() => {}); refreshEngine(); },
   speechtest: async () => {
     const out = $('#sptest'), l = ui.lang, sample = langInfo(l).hello;
     unlockAudio();
-    if (engineFor(S.tracks[l]) === 'whisper') {
-      primeAudio();
-      if (whisperState().state !== 'ready') {
-        out.textContent = tt('Downloading in-app speech recognition (once)…', 'در حال دانلود تشخیص گفتار داخل اپ (یک بار)…');
-        try { await loadWhisper(); } catch (e) { out.textContent = tt('❌ Download failed — check your connection.', '❌ دانلود نشد — اینترنت را چک کن.'); return; }
-      }
-      out.innerHTML = `${tt('Say:', 'بگو:')} <b dir="auto">${esc(sample)}</b><br>🎙 ${tt('Listening…', 'در حال گوش دادن…')}`;
-      const rec = await recordUtterance({ maxMs: 9000 });
-      if (rec.error) { out.textContent = rec.error === 'mic-denied' ? tt('❌ Microphone access is off. iPhone: Settings → Safari → Microphone → Allow.', '❌ دسترسی میکروفون خاموش است. آیفون: Settings ← Safari ← Microphone ← Allow.') : '❌ ' + rec.error; return; }
-      if (!rec.heard) { out.textContent = tt('⚠ Heard nothing. Speak louder, closer to the phone.', '⚠ چیزی نشنیدم. بلندتر و نزدیک‌تر به گوشی بگو.'); return; }
-      out.textContent = tt('Checking…', 'در حال بررسی…');
-      const text = await transcribe(rec.pcm, l).catch(() => '');
-      out.innerHTML = text ? `✅ ${tt('Heard:', 'شنیدم:')} <b dir="auto">${esc(text)}</b> <span class="sub">(Whisper)</span>` : tt('⚠ Heard nothing clear. Try again.', '⚠ چیز واضحی نشنیدم. دوباره امتحان کن.');
-      return;
-    }
     out.innerHTML = `${tt('Say:', 'بگو:')} <b dir="auto">${esc(sample)}</b><br>🎙 ${tt('Listening…', 'در حال گوش دادن…')}`;
     const r = await listenOnce(l, 9000, () => false, t => { out.innerHTML = `${tt('Say:', 'بگو:')} <b dir="auto">${esc(sample)}</b><br>🎙 ${esc(t)}`; });
-    const diag = `<div class="sub" style="font-size:.78rem;margin-top:4px" dir="ltr">SR:${recognitionSupported() ? 'yes' : 'no'} · app:${(window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone ? 'installed' : 'browser'} · ${esc(navigator.userAgent.replace(/^.*?\(([^)]*)\).*$/, '$1').slice(0, 60))}</div>`;
     if (r === null) out.textContent = recognitionBlocked() ? tt('❌ The microphone or speech recognition is not allowed. Check the browser\'s microphone permission (iPhone: also turn on Siri & Dictation).', '❌ اجازهٔ میکروفون یا تشخیص گفتار داده نشده. اجازهٔ میکروفون مرورگر را بررسی کن (آیفون: Siri و Dictation را هم روشن کن).') : tt('❌ This browser has no speech recognition. Use Chrome (Android) or Safari (iPhone).', '❌ این مرورگر تشخیص گفتار ندارد. Chrome (اندروید) یا Safari (آیفون) را امتحان کن.');
     else if (r.text) out.innerHTML = `✅ ${tt('Heard:', 'شنیدم:')} <b dir="auto">${esc(r.text)}</b>`;
     else out.textContent = r.error ? tt(`❌ Error: ${r.error}. Close other apps using the microphone and try again.`, `❌ خطا: ${r.error}. برنامه‌های دیگری که از میکروفون استفاده می‌کنند را ببند و دوباره امتحان کن.`) : tt('⚠ Heard nothing. Speak louder, closer to the phone, right after tapping.', '⚠ چیزی نشنیدم. بلندتر و نزدیک‌تر به گوشی، بلافاصله بعد از زدن دکمه بگو.');
-    out.insertAdjacentHTML('beforeend', diag);
   },
   testvoice: () => { unlockAudio(); const t = S.tracks[ui.lang]; speak(langInfo(ui.lang).hello, t.speed, t); },
 };
@@ -172,9 +122,6 @@ export function onChange(ev) {
   if (id === 'level') { t.level = ev.target.value; save(); $('#lhint').textContent = profileHint(t.level); }
   if (id === 'voice') { t.voiceURI = ev.target.value; save(); }
   if (id === 'warmup') { t.warmup = ev.target.checked; save(); }
-  if (id === 'style') { t.style = ev.target.value; save(); }
-  if (id === 'srEngine') { t.srEngine = ev.target.value; save(); refreshEngine(); }
-  if (id === 'micMode') { t.micMode = ev.target.value; save(); }
   if (id === 'afterGreen') { t.afterGreen = ev.target.value; save(); }
   if (id === 'check') { t.check = ev.target.checked; save(); }
   if (id === 'checkReps') { t.checkReps = +ev.target.value; save(); }

@@ -6,7 +6,6 @@ import { forgetBooks } from '../data/books.js';
 import { tt, num, locale, langName, weekdays, getUI, setUI } from '../i18n.js';
 import { app, esc, ui, isFramed, isStandalone, toast, confirmTap } from './dom.js';
 import { renderTrack } from './track.js';
-import { VERSION } from '../version.js';
 
 export function renderHome() {
   if (ui.pendingReload) { location.reload(); return; }   // an update arrived during the session
@@ -14,7 +13,7 @@ export function renderHome() {
   ui.view = 'home'; ui.lang = null;
   const today = new Intl.DateTimeFormat(locale(), { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
   app.innerHTML = `
-  <header class="top"><img src="icons/icon.svg" alt="" width="48" height="48" style="border-radius:12px"><div class="grow"><h1>Hopopo</h1><p class="sub">${tt('Daily shadowing', 'شادوینگ روزانه')} – ${today}</p></div><button class="langbtn" data-act="help" aria-label="${tt('Guide', 'راهنما')}">❓</button><button class="langbtn" data-act="uilang" aria-label="Language">${getUI() === 'fa' ? 'EN' : 'فا'}</button></header>
+  <header class="top"><img src="icons/icon.svg" alt="" width="48" height="48" style="border-radius:12px"><div class="grow"><h1>Hopopo</h1><p class="sub">${tt('Daily shadowing', 'شادوینگ روزانه')} – ${today}</p></div><button class="langbtn" data-act="uilang" aria-label="Language">${getUI() === 'fa' ? 'EN' : 'فا'}</button></header>
   ${S.order.map((l, i) => trackCard(l, i)).join('')}
   ${addLanguageCard()}
   ${installCard()}
@@ -22,13 +21,11 @@ export function renderHome() {
   showVersion();
 }
 
-/** Shows the running code's version, and notes when a newer service worker is still being applied. */
+/** The installed version = the service worker's cache name (sw.js is the single source of truth). */
 async function showVersion() {
   try {
-    const el = document.getElementById('ver'); if (!el) return;
-    el.textContent = 'v' + VERSION;      // the code that is running
     const v = (await caches.keys()).find(k => k.startsWith('hopopo-'));
-    if (v && v.slice(7) !== VERSION) el.textContent += ' · ' + tt('updating…', 'در حال به‌روزرسانی…');
+    const el = document.getElementById('ver'); if (v && el) el.textContent = 'v' + v.slice(7);
   } catch (e) { /* caches unavailable (e.g. embedded preview) */ }
 }
 

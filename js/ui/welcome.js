@@ -2,7 +2,7 @@
 import { CATALOG, LEVELS } from '../core/languages.js';
 import { S, save, addTrack } from '../data/store.js';
 import { tt, langName, getUI, setUI } from '../i18n.js';
-import { app, esc, ui, toast } from './dom.js';
+import { app, esc, ui } from './dom.js';
 import { renderTrack } from './track.js';
 
 const LEVEL_TEXT = {
@@ -18,7 +18,7 @@ export function renderWelcome() {
   const guess = (navigator.language || 'en').slice(0, 2);
   const first = CATALOG.find(c => c.id !== guess) || CATALOG[0];
   app.innerHTML = `
-  <header class="top"><img src="icons/icon.svg" alt="" width="56" height="56" style="border-radius:14px"><div class="grow"><h1>Hopopo</h1><p class="sub">${tt('Daily shadowing with your own book', 'شادوینگ روزانه با کتاب خودت')}</p></div><button class="langbtn" data-act="help" aria-label="${tt('Guide', 'راهنما')}">❓</button><button class="langbtn" data-act="welcomeui">${getUI() === 'fa' ? 'EN' : 'فا'}</button></header>
+  <header class="top"><img src="icons/icon.svg" alt="" width="56" height="56" style="border-radius:14px"><div class="grow"><h1>Hopopo</h1><p class="sub">${tt('Daily shadowing with your own book', 'شادوینگ روزانه با کتاب خودت')}</p></div><button class="langbtn" data-act="welcomeui">${getUI() === 'fa' ? 'EN' : 'فا'}</button></header>
   <section class="card">
     <h3>${tt('Which language do you want to practise?', 'کدام زبان را می‌خواهی تمرین کنی؟')}</h3>
     <select id="wlang">${CATALOG.map(c => `<option value="${c.id}" ${c.id === first.id ? 'selected' : ''}>${esc(langName(c.id))} — ${esc(c.native)}</option>`).join('')}</select>
@@ -27,7 +27,7 @@ export function renderWelcome() {
     <h3 style="margin-top:12px">${tt('Minutes per day', 'چند دقیقه در روز؟')}</h3>
     <div class="row">${[10, 15, 20].map(m => `<label class="pill"><input type="radio" name="wmin" value="${m}" ${m === 15 ? 'checked' : ''}><span>${m}</span></label>`).join('')}</div>
     <button class="primary" style="margin-top:16px" data-act="welcomego">${tt('Start', 'شروع')}</button>
-    <p class="hint">${tt('You can add more languages and change your level any time.', 'هر وقت خواستی می‌توانی زبان دیگری اضافه کنی یا سطحت را عوض کنی.')} <a href="#" data-act="help">${tt('How does it work? → Guide', 'چطور کار می‌کند؟ ← راهنما')}</a></p>
+    <p class="hint">${tt('You can add more languages and change your level any time.', 'هر وقت خواستی می‌توانی زبان دیگری اضافه کنی یا سطحت را عوض کنی.')}</p>
   </section>`;
 }
 
@@ -40,6 +40,5 @@ export const actions = {
     const t = addTrack(l, level); t.minutes = minutes;
     S.onboarded = true; save();
     renderTrack(l);
-    toast(tt('Next: add your book or lesson below. Tap ❓ on the home screen for the guide.', 'قدم بعد: کتاب یا درست را همین پایین اضافه کن. راهنما با ❓ در صفحهٔ اصلی.'), 6000);
   },
 };

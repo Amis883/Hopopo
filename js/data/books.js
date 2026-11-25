@@ -1,6 +1,6 @@
 // Book texts (arrays of sentences) in IndexedDB, with an in-memory cache and fallback.
 import { SAMPLES } from '../core/languages.js';
-import { textToSentences, cleanSentence, isGarbage } from '../core/text.js';
+import { textToSentences } from '../core/text.js';
 import { S, save } from './store.js';
 
 const DB = (() => {
@@ -34,34 +34,12 @@ export async function getBook(lang, id) {
   const b = id.startsWith('sample-') && SAMPLES[lang]
     ? { id, lang, sentences: textToSentences(SAMPLES[lang].text, lang) }
     : await DB.get('book:' + id);
-  if (b && !b.cleaned && b.kind !== 'audio' && !id.startsWith('sample-')) await cleanBook(lang, id, b);
   if (b) {
     cache.set(id, b);
     const m = S.tracks[lang] && S.tracks[lang].books[id];
     if (m && m.total !== b.sentences.length) { m.total = b.sentences.length; save(); }
   }
   return b;
-}
-
-/**
- * One-time cleanup of books imported before the OCR-noise filter existed: drops garbage sentences
- * and moves the saved position/last session so the learner keeps their place.
- */
-async function cleanBook(lang, id, b) {
-  const keep = [], map = [];          // map[oldIndex] = new index of the first kept sentence at/after it
-  b.sentences.forEach((x, i) => { map[i] = keep.length; const c = cleanSentence(x, lang); if (c && !isGarbage(c, lang)) keep.push(c); });
-  map[b.sentences.length] = keep.length;
-  const removed = b.sentences.length - keep.length;
-  if (b.translations) b.translations = b.sentences.map((x, i) => [x, i]).filter(([x]) => { const c = cleanSentence(x, lang); return c && !isGarbage(c, lang); }).map(([, i]) => b.translations[i] || '');
-  b.sentences = keep; b.cleaned = true;
-  await DB.put('book:' + id, b);
-  const m = S.tracks[lang] && S.tracks[lang].books[id];
-  if (m) {
-    m.pos = map[Math.min(m.pos, map.length - 1)] || 0;
-    if (m.last) m.last = [map[Math.min(m.last[0], map.length - 1)], map[Math.min(m.last[1], map.length - 1)]];
-    m.total = keep.length; save();
-  }
-  b.removedNoise = removed;
 }
 
 /** Adds sentences as a new book, or appends them to `appendId`. Returns the number added. */
